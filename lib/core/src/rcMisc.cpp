@@ -1708,49 +1708,47 @@ updateOffsetTimeStr( char *timeStr, int offset ) {
  */
 int
 getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
+    char *t{delayStr};
 
-    rodsLong_t  it, dt;
-    char *t, *s;
-    char u;
-    char tstr[200];
-    int n;
-
-    std::chrono::duration<rodsLong_t> currentTime{atoll(currTime)};
-
-    t = delayStr;
     while ( isdigit( *t ) ) {
         t++;
     }
-    u = *t;
+
+    char timeUnit{*t};
+
     *t = '\0';
-    dt = atoll( delayStr );
-    it = dt;
-    *t = u;
+    rodsLong_t noUnitDelayTime{atoll( delayStr )};
+    *t = timeUnit;
     t++;
 
     std::chrono::duration<rodsLong_t> delayTimeDuration{};
-    switch ( u ) {
+    switch ( timeUnit ) {
     case 's':
-        delayTimeDuration += std::chrono::seconds{dt};
+        delayTimeDuration += std::chrono::seconds{noUnitDelayTime};
         break;
     case 'm':
-        delayTimeDuration += std::chrono::minutes{dt};
+        delayTimeDuration += std::chrono::minutes{noUnitDelayTime};
         break;
     case 'h':
-        delayTimeDuration += std::chrono::hours{dt};
+        delayTimeDuration += std::chrono::hours{noUnitDelayTime};
         break;
     case 'd':
-        delayTimeDuration += std::chrono::days{dt};
+        delayTimeDuration += std::chrono::days{noUnitDelayTime};
         break;
     case 'y':
-        delayTimeDuration += std::chrono::years{dt};
+        delayTimeDuration += std::chrono::years{noUnitDelayTime};
         break;
     default:
         break;
     }
 
+    std::chrono::duration<rodsLong_t> currentTime{atoll(currTime)};
     auto nextDelay{delayTimeDuration + currentTime};
     auto doubleDelay{delayTimeDuration * 2};
+
+    char *alternateDelay;
+    char alternateDelayBuffer[200];
+    int delayCounter;
 
     while ( isspace( *t ) ) {
         t++;
@@ -1761,114 +1759,114 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
     }
     if ( !strcmp( t, "DOUBLE FOR EVER" ) ) {
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c DOUBLE FOR EVER", doubleDelay.count(), u );
+        sprintf( delayStr, "%lld%c DOUBLE FOR EVER", doubleDelay.count(), timeUnit );
         return 3;
     }
-    if ( ( s = strstr( t, "REPEAT UNTIL SUCCESS OR UNTIL " ) ) != NULL ) {
-        s = s + strlen( "REPEAT UNTIL SUCCESS OR UNTIL " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "REPEAT UNTIL SUCCESS OR UNTIL " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "REPEAT UNTIL SUCCESS OR UNTIL " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        convertDateFormat( tstr, currTime );
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        convertDateFormat( alternateDelayBuffer, currTime );
         currentTime = std::chrono::duration<rodsLong_t>{atoll(currTime)};
         nextDelay = delayTimeDuration + currentTime;
         sprintf( nextTime, "%lld", nextDelay.count() );
-        if ( atoll( tstr ) < nextDelay.count() ) {
+        if ( atoll( alternateDelayBuffer ) < nextDelay.count() ) {
             return 2;
         }
         else {
             return 1;
         }
     }
-    if ( ( s = strstr( t, "DOUBLE UNTIL SUCCESS OR UNTIL " ) ) != NULL ) {
-        s = s + strlen( "DOUBLE UNTIL SUCCESS OR UNTIL " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "DOUBLE UNTIL SUCCESS OR UNTIL " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "DOUBLE UNTIL SUCCESS OR UNTIL " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        convertDateFormat( tstr, currTime );
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        convertDateFormat( alternateDelayBuffer, currTime );
         currentTime = std::chrono::duration<rodsLong_t>{atoll(currTime)};
         nextDelay = delayTimeDuration + currentTime;
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS OR UNTIL %s", doubleDelay.count(), u, s );
-        if ( atoll( tstr ) < delayTimeDuration.count() ) {
+        sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS OR UNTIL %s", doubleDelay.count(), timeUnit, alternateDelay );
+        if ( atoll( alternateDelayBuffer ) < delayTimeDuration.count() ) {
             return 2;
         }
         else {
             return 4;
         }
     }
-    if ( ( s = strstr( t, "REPEAT UNTIL SUCCESS OR " ) ) != NULL ) {
-        s = s + strlen( "REPEAT UNTIL SUCCESS OR " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "REPEAT UNTIL SUCCESS OR " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "REPEAT UNTIL SUCCESS OR " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        s = tstr;
-        while ( isdigit( *s ) ) {
-            s++;
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        alternateDelay = alternateDelayBuffer;
+        while ( isdigit( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        *s = '\0';
-        n = atoi( tstr );
-        n--;
+        *alternateDelay = '\0';
+        delayCounter = atoi( alternateDelayBuffer );
+        delayCounter--;
         sprintf( nextTime, "%lld", nextDelay.count() );
-        if ( strstr( s + 1, "ORIGINAL TIMES" ) != NULL ) {
-            sprintf( delayStr, "%lld%c REPEAT UNTIL SUCCESS OR %i %s", delayTimeDuration.count(), u, n, s + 1 );
+        if ( strstr( alternateDelay + 1, "ORIGINAL TIMES" ) != NULL ) {
+            sprintf( delayStr, "%lld%c REPEAT UNTIL SUCCESS OR %i %s", delayTimeDuration.count(), timeUnit, delayCounter, alternateDelay + 1 );
         }
         else {
-            sprintf( delayStr, "%lld%c REPEAT UNTIL SUCCESS OR %i TIMES. ORIGINAL TIMES=%i", delayTimeDuration.count(), u, n, n + 1 );
+            sprintf( delayStr, "%lld%c REPEAT UNTIL SUCCESS OR %i TIMES. ORIGINAL TIMES=%i", delayTimeDuration.count(), timeUnit, delayCounter, delayCounter + 1 );
         }
-        if ( n <= 0 ) {
+        if ( delayCounter <= 0 ) {
             return 2;
         }
         else {
             return 4;
         }
     }
-    if ( ( s = strstr( t, "DOUBLE UNTIL SUCCESS OR " ) ) != NULL ) {
-        s = s + strlen( "DOUBLE UNTIL SUCCESS OR " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "DOUBLE UNTIL SUCCESS OR " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "DOUBLE UNTIL SUCCESS OR " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        s = tstr;
-        while ( isdigit( *s ) ) {
-            s++;
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        alternateDelay = alternateDelayBuffer;
+        while ( isdigit( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        *s = '\0';
-        n = atoi( tstr );
-        n--;
+        *alternateDelay = '\0';
+        delayCounter = atoi( alternateDelayBuffer );
+        delayCounter--;
         sprintf( nextTime, "%lld", nextDelay.count() );
-        if ( strstr( s + 1, "ORIGINAL TIMES" ) != NULL ) {
-            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS OR %i %s", doubleDelay.count(), u, n, s + 1 );
+        if ( strstr( alternateDelay + 1, "ORIGINAL TIMES" ) != NULL ) {
+            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS OR %i %s", doubleDelay.count(), timeUnit, delayCounter, alternateDelay + 1 );
         }
         else {
-            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS OR %i TIMES. ORIGINAL TIMES=%i", doubleDelay.count(), u, n, n + 1 );
+            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS OR %i TIMES. ORIGINAL TIMES=%i", doubleDelay.count(), timeUnit, delayCounter, delayCounter + 1 );
         }
-        if ( n <= 0 ) {
+        if ( delayCounter <= 0 ) {
             return 2;
         }
         else {
             return 4;
         }
     }
-    if ( ( s = strstr( t, "DOUBLE UNTIL SUCCESS UPTO " ) ) != NULL ) {
-        s = s + strlen( "DOUBLE UNTIL SUCCESS UPTO " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "DOUBLE UNTIL SUCCESS UPTO " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "DOUBLE UNTIL SUCCESS UPTO " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        convertDateFormat( tstr, currTime );
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        convertDateFormat( alternateDelayBuffer, currTime );
         currentTime = std::chrono::duration<rodsLong_t>{atoll(currTime)};
         nextDelay = delayTimeDuration + currentTime;
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS UPTO %s", doubleDelay.count(), u, s );
-        if ( atoll( tstr ) > nextDelay.count() ) {
-            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS UPTO %s", doubleDelay.count(), u, s );
+        sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS UPTO %s", doubleDelay.count(), timeUnit, alternateDelay );
+        if ( atoll( alternateDelayBuffer ) > nextDelay.count() ) {
+            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS UPTO %s", doubleDelay.count(), timeUnit, alternateDelay );
         }
         else {
-            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS UPTO %s", delayTimeDuration.count() , u, s );
+            sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS UPTO %s", delayTimeDuration.count() , timeUnit, alternateDelay );
         }
         return 4;
     }
@@ -1878,39 +1876,39 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
     }
     if ( strstr( t, "DOUBLE UNTIL SUCCESS" ) != NULL ) {
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS", doubleDelay.count(), u );
+        sprintf( delayStr, "%lld%c DOUBLE UNTIL SUCCESS", doubleDelay.count(), timeUnit );
         return 4;
     }
-    if ( ( s = strstr( t, "REPEAT UNTIL " ) ) != NULL ) {
-        s = s + strlen( "REPEAT UNTIL " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "REPEAT UNTIL " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "REPEAT UNTIL " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        convertDateFormat( tstr, currTime );
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        convertDateFormat( alternateDelayBuffer, currTime );
         currentTime = std::chrono::duration<rodsLong_t>{atoll(currTime)};
         nextDelay = delayTimeDuration + currentTime;
         sprintf( nextTime, "%lld", nextDelay.count() );
-        if ( atoll( tstr ) < nextDelay.count() ) {
+        if ( atoll( alternateDelayBuffer ) < nextDelay.count() ) {
             return 2;
         }
         else {
             return 0;
         }
     }
-    if ( ( s = strstr( t, "DOUBLE UNTIL " ) ) != NULL ) {
-        s = s + strlen( "DOUBLE UNTIL " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "DOUBLE UNTIL " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "DOUBLE UNTIL " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        convertDateFormat( tstr, currTime );
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        convertDateFormat( alternateDelayBuffer, currTime );
         currentTime = std::chrono::duration<rodsLong_t>{atoll(currTime)};
         nextDelay = delayTimeDuration + currentTime;
         sprintf( nextTime, "%lld", nextDelay.count() );
         /* sprintf(delayStr,"%lld%c DOUBLE UNTIL %s", it * 2, u,s); */
-        sprintf( delayStr, "%lld%c DOUBLE UNTIL %s", doubleDelay.count(), u, tstr );
-        if ( atoll( tstr ) < nextDelay.count() ) {
+        sprintf( delayStr, "%lld%c DOUBLE UNTIL %s", doubleDelay.count(), timeUnit, alternateDelayBuffer );
+        if ( atoll( alternateDelayBuffer ) < nextDelay.count() ) {
             return 2;
         }
         else {
@@ -1918,55 +1916,55 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         }
 
     }
-    if ( ( s = strstr( t, "REPEAT " ) ) != NULL ) {
-        s = s + strlen( "REPEAT " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "REPEAT " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "REPEAT " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        s = tstr;
-        while ( isdigit( *s ) ) {
-            s++;
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        alternateDelay = alternateDelayBuffer;
+        while ( isdigit( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        *s = '\0';
-        n = atoi( tstr );
-        n--;
+        *alternateDelay = '\0';
+        delayCounter = atoi( alternateDelayBuffer );
+        delayCounter--;
 
         sprintf( nextTime, "%lld", nextDelay.count() );
-        if ( strstr( s + 1, "ORIGINAL TIMES" ) != NULL ) {
-            sprintf( delayStr, "%lld%c REPEAT %i %s", delayTimeDuration.count(), u, n, s + 1 );
+        if ( strstr( alternateDelay + 1, "ORIGINAL TIMES" ) != NULL ) {
+            sprintf( delayStr, "%lld%c REPEAT %i %s", delayTimeDuration.count(), timeUnit, delayCounter, alternateDelay + 1 );
         }
         else {
-            sprintf( delayStr, "%lld%c REPEAT %i TIMES. ORIGINAL TIMES=%i", delayTimeDuration.count(), u, n, n + 1 );
+            sprintf( delayStr, "%lld%c REPEAT %i TIMES. ORIGINAL TIMES=%i", delayTimeDuration.count(), timeUnit, delayCounter, delayCounter + 1 );
         }
-        if ( n <= 0 ) {
+        if ( delayCounter <= 0 ) {
             return 2;
         }
         else {
             return 3;
         }
     }
-    if ( ( s = strstr( t, "DOUBLE " ) ) != NULL ) {
-        s = s + strlen( "DOUBLE " );
-        while ( isspace( *s ) ) {
-            s++;
+    if ( ( alternateDelay = strstr( t, "DOUBLE " ) ) != NULL ) {
+        alternateDelay = alternateDelay + strlen( "DOUBLE " );
+        while ( isspace( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        snprintf( tstr, sizeof( tstr ), "%s", s );
-        s = tstr;
-        while ( isdigit( *s ) ) {
-            s++;
+        snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
+        alternateDelay = alternateDelayBuffer;
+        while ( isdigit( *alternateDelay ) ) {
+            alternateDelay++;
         }
-        *s = '\0';
-        n = atoi( tstr );
-        n--;
+        *alternateDelay = '\0';
+        delayCounter = atoi( alternateDelayBuffer );
+        delayCounter--;
         sprintf( nextTime, "%lld", nextDelay.count() );
-        if ( strstr( s + 1, "ORIGINAL TIMES" ) != NULL ) {
-            sprintf( delayStr, "%lld%c DOUBLE %i %s", doubleDelay.count(), u, n, s + 1 );
+        if ( strstr( alternateDelay + 1, "ORIGINAL TIMES" ) != NULL ) {
+            sprintf( delayStr, "%lld%c DOUBLE %i %s", doubleDelay.count(), timeUnit, delayCounter, alternateDelay + 1 );
         }
         else {
-            sprintf( delayStr, "%lld%c DOUBLE %i TIMES. ORIGINAL TIMES=%i", doubleDelay.count(), u, n, n + 1 );
+            sprintf( delayStr, "%lld%c DOUBLE %i TIMES. ORIGINAL TIMES=%i", doubleDelay.count(), timeUnit, delayCounter, delayCounter + 1 );
         }
-        if ( n <= 0 ) {
+        if ( delayCounter <= 0 ) {
             return 2;
         }
         else {
