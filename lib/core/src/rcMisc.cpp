@@ -2023,20 +2023,18 @@ isInteger( const char * inStr ) {
 
 int
 convertDateFormat( char * s, char * currTime ) {
-    rodsLong_t  it;
-    char tstr[200];
-    int i;
-    rstrcpy( tstr, s, 199 );
-    i = checkDateFormat( tstr );
-    if ( i != 0 ) {
-        return i;
+    constexpr int bufferSize{200};
+    char timeBuffer[bufferSize]{};
+    strncpy(timeBuffer, s, bufferSize - 1);
+    if (int errorCode{checkDateFormat(timeBuffer)}; errorCode != 0) {
+        return errorCode;
     }
-    if ( !isInteger( s ) && strchr( s, '-' ) == NULL && strchr( s, ':' ) == NULL ) {
-        it = atol( tstr ) + atol( currTime );
-        sprintf( s, "%lld", it );
+    if (!isInteger(s) && strchr(s, '-') == NULL && strchr(s, ':') == NULL) {
+        rodsLong_t it{atoll(timeBuffer) + atoll(currTime)};
+        sprintf(s, "%lld", it);
     }
     else {
-        strcpy( s, tstr );
+        strncpy(s, timeBuffer, bufferSize);
     }
     return 0;
 }
