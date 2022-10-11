@@ -1897,7 +1897,6 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
         convertDateFormat( alternateDelayBuffer, currTime );
         sprintf( nextTime, "%lld", nextDelay.count() );
-        /* sprintf(delayStr,"%lld%c DOUBLE UNTIL %s", it * 2, u,s); */
         sprintf( delayStr, "%lld%c %s%s", doubleDelay.count(), timeUnit, directive, alternateDelayBuffer );
         if ( atoll( alternateDelayBuffer ) < nextDelay.count() ) {
             return 2;
