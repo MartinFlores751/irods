@@ -1739,6 +1739,7 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         delayTimeDuration += std::chrono::years{noUnitDelayTime};
         break;
     default:
+        delayTimeDuration += std::chrono::seconds{noUnitDelayTime};
         break;
     }
 
