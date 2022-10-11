@@ -1709,13 +1709,11 @@ updateOffsetTimeStr( char *timeStr, int offset ) {
 int
 getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
     char *t{delayStr};
-
     while ( isdigit( *t ) ) {
         t++;
     }
 
     char timeUnit{*t};
-
     *t = '\0';
     rodsLong_t noUnitDelayTime{atoll( delayStr )};
     *t = timeUnit;
