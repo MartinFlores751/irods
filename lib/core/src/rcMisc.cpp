@@ -1743,7 +1743,7 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
 
     std::chrono::duration<rodsLong_t> currentTime{atoll(currTime)};
     auto nextDelay{delayTimeDuration + currentTime};
-    auto doubleDelay{delayTimeDuration * 2};
+    auto doubleDelay{noUnitDelayTime * 2};
 
     char *alternateDelay;
     char alternateDelayBuffer[200];
@@ -1758,7 +1758,7 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
     }
     if ( !strcmp( t, "DOUBLE FOR EVER" ) ) {
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c DOUBLE FOR EVER", doubleDelay.count(), timeUnit );
+        sprintf( delayStr, "%lld%c DOUBLE FOR EVER", doubleDelay, timeUnit );
         return 3;
     }
     if (const char* directive{"REPEAT UNTIL SUCCESS OR UNTIL "}; ( alternateDelay = strstr( t, directive) ) != NULL ) {
@@ -1784,7 +1784,7 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
         convertDateFormat( alternateDelayBuffer, currTime );
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c %s%s", doubleDelay.count(), timeUnit, directive, alternateDelay );
+        sprintf( delayStr, "%lld%c %s%s", doubleDelay, timeUnit, directive, alternateDelay );
         if ( atoll( alternateDelayBuffer ) < delayTimeDuration.count() ) {
             return 2;
         }   
@@ -1834,10 +1834,10 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         delayCounter--;
         sprintf( nextTime, "%lld", nextDelay.count() );
         if ( strstr( alternateDelay + 1, "ORIGINAL TIMES" ) != NULL ) {
-            sprintf( delayStr, "%lld%c %s%i %s", doubleDelay.count(), timeUnit, directive, delayCounter, alternateDelay + 1 );
+            sprintf( delayStr, "%lld%c %s%i %s", doubleDelay, timeUnit, directive, delayCounter, alternateDelay + 1 );
         }
         else {
-            sprintf( delayStr, "%lld%c %s%i TIMES. ORIGINAL TIMES=%i", doubleDelay.count(), timeUnit, directive, delayCounter, delayCounter + 1 );
+            sprintf( delayStr, "%lld%c %s%i TIMES. ORIGINAL TIMES=%i", doubleDelay, timeUnit, directive, delayCounter, delayCounter + 1 );
         }
         if ( delayCounter <= 0 ) {
             return 2;
@@ -1854,9 +1854,9 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
         convertDateFormat( alternateDelayBuffer, currTime );
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c %s%s", doubleDelay.count(), timeUnit, directive, alternateDelay );
+        sprintf( delayStr, "%lld%c %s%s", doubleDelay, timeUnit, directive, alternateDelay );
         if ( atoll( alternateDelayBuffer ) > nextDelay.count() ) {
-            sprintf( delayStr, "%lld%c %s%s", doubleDelay.count(), timeUnit, directive, alternateDelay );
+            sprintf( delayStr, "%lld%c %s%s", doubleDelay, timeUnit, directive, alternateDelay );
         }
         else {
             sprintf( delayStr, "%lld%c %s%s", delayTimeDuration.count() , timeUnit, directive, alternateDelay );
@@ -1869,7 +1869,7 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
     }
     if (const char* directive{"DOUBLE UNTIL SUCCESS"}; strstr( t, directive ) != NULL ) {
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c %s", doubleDelay.count(), timeUnit, directive );
+        sprintf( delayStr, "%lld%c %s", doubleDelay, timeUnit, directive );
         return 4;
     }
     if (const char* directive{"REPEAT UNTIL "}; ( alternateDelay = strstr( t, directive ) ) != NULL ) {
@@ -1895,7 +1895,7 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         snprintf( alternateDelayBuffer, sizeof( alternateDelayBuffer ), "%s", alternateDelay );
         convertDateFormat( alternateDelayBuffer, currTime );
         sprintf( nextTime, "%lld", nextDelay.count() );
-        sprintf( delayStr, "%lld%c %s%s", doubleDelay.count(), timeUnit, directive, alternateDelayBuffer );
+        sprintf( delayStr, "%lld%c %s%s", doubleDelay, timeUnit, directive, alternateDelayBuffer );
         if ( atoll( alternateDelayBuffer ) < nextDelay.count() ) {
             return 2;
         }
@@ -1947,10 +1947,10 @@ getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
         delayCounter--;
         sprintf( nextTime, "%lld", nextDelay.count() );
         if ( strstr( alternateDelay + 1, "ORIGINAL TIMES" ) != NULL ) {
-            sprintf( delayStr, "%lld%c %s%i %s", doubleDelay.count(), timeUnit, directive, delayCounter, alternateDelay + 1 );
+            sprintf( delayStr, "%lld%c %s%i %s", doubleDelay, timeUnit, directive, delayCounter, alternateDelay + 1 );
         }
         else {
-            sprintf( delayStr, "%lld%c %s%i TIMES. ORIGINAL TIMES=%i", doubleDelay.count(), timeUnit, directive, delayCounter, delayCounter + 1 );
+            sprintf( delayStr, "%lld%c %s%i TIMES. ORIGINAL TIMES=%i", doubleDelay, timeUnit, directive, delayCounter, delayCounter + 1 );
         }
         if ( delayCounter <= 0 ) {
             return 2;
