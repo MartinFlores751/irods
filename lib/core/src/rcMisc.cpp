@@ -33,6 +33,7 @@
 #include <nlohmann/json.hpp>
 
 #include <openssl/md5.h>
+#include <tuple>
 
 #ifndef windows_platform
     #include <sys/time.h>
@@ -53,6 +54,7 @@
 #include <unordered_map>
 #include <iterator>
 #include <chrono>
+#include <sstream>
 
 /* check with the input path is a valid path -
  * 1 - valid
@@ -1706,6 +1708,195 @@ updateOffsetTimeStr( char *timeStr, int offset ) {
  *             otherwise change both delayStr as well as nextExec time.
  *
  */
+auto parse_delay_duration(rodsLong_t _no_unit_delay_time, char _delay_unit) -> std::chrono::duration<rodsLong_t> {
+        switch (_delay_unit) {
+            case ' ':
+            case 's':
+                return std::chrono::seconds{_no_unit_delay_time};
+                break;
+            case 'm':
+                return std::chrono::minutes{_no_unit_delay_time};
+                break;
+            case 'h':
+                return std::chrono::hours{_no_unit_delay_time};
+                break;
+            case 'd':
+                return std::chrono::days{_no_unit_delay_time};
+                break;
+            case 'y':
+                return std::chrono::years{_no_unit_delay_time};
+                break;
+            default:
+                // Error check?
+                break;
+        }
+}
+
+enum class ReturnCode
+{
+    continue_with_delay,
+    if_success_do_not_repeat,
+    do_not_repeat,
+    update_delay_string_and_time,
+    if_not_success_update_delay_string_and_time,
+};
+
+auto parse_sub_directive(
+    std::stringstream& _data_stream,
+    std::stringstream& _directive_builder,
+    const std::chrono::duration<rodsLong_t>& _current_time,
+    const std::chrono::duration<rodsLong_t>& _next_delay,
+    int _current_depth = 0)
+{
+    if (_current_depth > 1) {
+        // Error handling
+    }
+
+    auto parse_next_string{[](auto& _stream) -> std::string {
+        std::string input_token;
+        if (_stream >> input_token) {
+            return input_token;
+        }
+        else {
+            return ""; // Should this string symbolize something?
+        }
+    }};
+
+    std::string current_directive{parse_next_string(_data_stream)};
+    if (current_directive == "FOR") {
+        _directive_builder << ' ' << current_directive;
+        current_directive = parse_next_string(_data_stream);
+
+        if (current_directive == "EVER")
+        { // Could still be an invalid string if '10s REPEAT FOR EVER HAHAHA, I GOT PAST THE SECURITY GATE >:)'
+            _directive_builder << current_directive;
+            return std::make_tuple(ReturnCode::continue_with_delay, _directive_builder.str(), _next_delay);
+        }
+        else {
+            // Do error handling
+        }
+    }
+    else if (current_directive == "UNTIL") {
+        _directive_builder << ' ' << current_directive;
+        current_directive = parse_next_string(_data_stream);
+
+        if (current_directive == "SUCCESS") {
+            _directive_builder << ' ' << current_directive;
+            if (!(_data_stream >> current_directive)) { // Surely theres a better way???
+                return std::make_tuple(ReturnCode::if_success_do_not_repeat, _directive_builder.str(), _next_delay);
+            }
+            else if (current_directive == "OR") {
+                _directive_builder << ' ' << current_directive;
+                return parse_sub_directive(
+                    _data_stream,
+                    _directive_builder,
+                    _current_time,
+                    _next_delay,
+                    _current_depth + 1); // Recurse time B)
+            }
+            else {
+                // Oh no.... Error handling
+            }
+        }
+        else if (std::isdigit(current_directive.at(0))) {
+            _directive_builder << ' ' << current_directive;
+
+            std::string time_buffer{};
+            time_buffer.resize(200); // Be very carful to use 'resize()' when interfacting with C!!!
+            std::copy(current_directive.cbegin(), current_directive.cend(), time_buffer.begin());
+
+            std::string old_current_time{std::to_string(_current_time.count())};
+            std::string passed_in_time{std::to_string(_current_time.count())};
+            convertDateFormat(time_buffer.data(), passed_in_time.data()); // C-style date parser (not mine)
+            assert(old_current_time == passed_in_time); // CYA kinda thing ;)
+
+            rodsLong_t stop_execution_time{std::stoll(time_buffer)};
+
+            if (stop_execution_time < _current_time.count()) {
+                return std::make_tuple(ReturnCode::do_not_repeat, _directive_builder.str(), _next_delay);
+            }
+            else {
+                return std::make_tuple(ReturnCode::continue_with_delay, _directive_builder.str(), _next_delay);
+            }
+        }
+    }
+    else if (std::isdigit(current_directive.at(0))) {
+        int counter{std::stoi(current_directive)};
+        _directive_builder << ' ' << counter - 1;
+
+        current_directive = parse_next_string(_data_stream);
+        if (current_directive == "TIMES") { // Check is ACTUALLY DONE
+            _directive_builder << ' ' << current_directive << ". ORIGINAL TIMES=" << counter;
+        }
+        else if (current_directive == "TIMES.") {
+            _directive_builder << ' ' << current_directive;
+
+            // ORGINIAL
+            current_directive = parse_next_string(_data_stream);
+            _directive_builder << ' ' << current_directive;
+
+            // TIMES=nnnnn
+            current_directive = parse_next_string(_data_stream);
+            _directive_builder << ' ' << current_directive;
+        }
+        else {
+            // More error :'(
+        }
+
+        if (counter <= 0) {
+            return std::make_tuple(ReturnCode::do_not_repeat, _directive_builder.str(), _next_delay);
+        }
+        else {
+            return std::make_tuple(ReturnCode::update_delay_string_and_time, _directive_builder.str(), _next_delay);
+        }
+    }
+    else {
+        // Do error handling
+    }
+}
+
+[[nodiscard]] auto parse_and_generate_next_delay_time(
+    const std::chrono::duration<rodsLong_t>& _current_time,
+    const std::string& _delay_time) -> std::tuple<ReturnCode, std::string, std::chrono::duration<rodsLong_t>>
+{
+    std::stringstream delay_time{_delay_time};
+    rodsLong_t no_unit_delay_time;
+    delay_time >> no_unit_delay_time;
+
+    std::chrono::duration<rodsLong_t> delay_duration{};
+    char delay_time_unit;
+    if (std::isalpha(delay_time.peek()) || std::isblank(delay_time.peek())) {
+        delay_time >> delay_time_unit;
+        delay_duration = parse_delay_duration(no_unit_delay_time, delay_time_unit);
+    }
+    else {
+        // Error handling???
+    }
+
+    auto next_delay{delay_duration + _current_time};
+
+    std::string current_directive;
+    std::stringstream directive_builder;
+
+    // empty == "REPEAT FOR EVER"
+    if (!(delay_time >> current_directive)) {
+        directive_builder << no_unit_delay_time << delay_time_unit;
+        return std::make_tuple(ReturnCode::continue_with_delay, directive_builder.str(), next_delay);
+    }
+    else if (current_directive == "REPEAT") {
+        // Depending on how strict the test is, this could cause a failure, as there would a double space...
+        directive_builder << no_unit_delay_time << delay_time_unit << ' ' << current_directive;
+
+        return parse_sub_directive(delay_time, directive_builder, _current_time, next_delay);
+    }
+    else if (current_directive == "DOUBLE") {
+        auto double_delay{no_unit_delay_time * 2};
+        directive_builder << double_delay << delay_time_unit << ' ' << current_directive;
+
+        return parse_sub_directive(delay_time, directive_builder, _current_time, next_delay);
+    }
+}
+
 int
 getNextRepeatTime( char *currTime, char *delayStr, char *nextTime ) {
     char *t{delayStr};
