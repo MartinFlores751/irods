@@ -70,6 +70,7 @@ getFileType( rodsPath_t *rodsPath );
 void
 clearRodsPath( rodsPath_t *rodsPath );
 void clearRodsPathInp( rodsPathInp_t* path );
+void freeRodsPathInpMembers( rodsPathInp_t* path );
 
 // Returns a new path with the following special characters escaped:
 //   - '\f'
