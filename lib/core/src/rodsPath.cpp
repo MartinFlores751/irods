@@ -567,6 +567,23 @@ auto clearRodsPathInp( rodsPathInp_t* path ) -> void {
   memset(path, 0, sizeof(rodsPathInp_t));
 }
 
+auto freeRodsPathInpMembers( rodsPathInp_t* path ) -> void {
+  if (nullptr == path) {
+    return;
+  }
+
+  clearRodsPath(path->srcPath);
+  clearRodsPath(path->destPath);
+  clearRodsPath(path->targPath);
+
+  free(path->srcPath);
+  path->srcPath = nullptr;
+  free(path->destPath);
+  path->destPath = nullptr;
+  free(path->targPath);
+  path->targPath = nullptr;
+}
+
 char* escape_path(const char* _path)
 {
     static const std::map<char, std::string> special_char_mappings{
