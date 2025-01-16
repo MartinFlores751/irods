@@ -49,7 +49,8 @@ rsyncUtil( rcComm_t *conn, rodsEnv *myRodsEnv, rodsArguments_t *myRodsArgs,
         return savedStatus;
     }
 
-    dataObjInp_t dataObjOprInp;
+    dataObjInp_t dataObjOprInp{};
+    irods::at_scope_exit clearDataObj{[&dataObjOprInp] { clearDataObjInp(&dataObjOprInp); } };
     dataObjCopyInp_t dataObjCopyInp;
 
     if ( rodsPathInp->srcPath[0].objType <= COLL_OBJ_T &&
