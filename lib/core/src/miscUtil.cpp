@@ -210,12 +210,6 @@ getRodsObjType( rcComm_t *conn, rodsPath_t *rodsPath ) {
     rstrcpy( dataObjInp.objPath, rodsPath->outPath, MAX_NAME_LEN );
 
     rodsObjStat_t *rodsObjStatOut{};
-    irods::at_scope_exit clearObjStat{ [&rodsObjStatOut] {
-      free(rodsObjStatOut->specColl);
-      rodsObjStatOut->specColl = nullptr;
-      free(rodsObjStatOut);
-      rodsObjStatOut = nullptr;
-    } };
     status = rcObjStat( conn, &dataObjInp, &rodsObjStatOut );
 
     if ( status < 0 ) {
