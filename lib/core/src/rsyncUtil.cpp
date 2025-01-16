@@ -6,6 +6,7 @@
 #include "irods/miscUtil.h"
 #include "irods/checksum.h"
 #include "irods/rcGlobalExtern.h"
+#include "irods/irods_at_scope_exit.hpp"
 #include "irods/irods_log.hpp"
 #include "irods/irods_hasher_factory.hpp"
 #include "irods/irods_path_recursion.hpp"
