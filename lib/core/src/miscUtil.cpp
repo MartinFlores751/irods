@@ -199,16 +199,23 @@ rmdirR( char *startDir, char *destDir ) {
 int
 getRodsObjType( rcComm_t *conn, rodsPath_t *rodsPath ) {
     int status;
-    dataObjInp_t dataObjInp;
-    rodsObjStat_t *rodsObjStatOut = NULL;
-
+    
     if ( rodsPath == NULL ) {
         return USER__NULL_INPUT_ERR;
     }
 
-    memset( &dataObjInp, 0, sizeof( dataObjInp ) );
+    dataObjInp_t dataObjInp{};
+    irods::at_scope_exit clearData{ [&dataObjInp] { clearDataObjInp(&dataObjInp); } };
 
     rstrcpy( dataObjInp.objPath, rodsPath->outPath, MAX_NAME_LEN );
+
+    rodsObjStat_t *rodsObjStatOut{};
+    irods::at_scope_exit clearObjStat{ [&rodsObjStatOut] {
+      free(rodsObjStatOut->specColl);
+      rodsObjStatOut->specColl = nullptr;
+      free(rodsObjStatOut);
+      rodsObjStatOut = nullptr;
+    } };
     status = rcObjStat( conn, &dataObjInp, &rodsObjStatOut );
 
     if ( status < 0 ) {

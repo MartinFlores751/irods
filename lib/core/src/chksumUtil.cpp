@@ -5,6 +5,7 @@
 #include "irods/rodsLog.h"
 #include "irods/chksumUtil.h"
 #include "irods/rcGlobalExtern.h"
+#include "irods/irods_at_scope_exit.hpp"
 
 #include <sys/time.h>
 
@@ -26,7 +27,8 @@ int chksumUtil(rcComm_t* conn,
     }
 
     collInp_t collInp;
-    dataObjInp_t dataObjInp;
+    dataObjInp_t dataObjInp{};
+    irods::at_scope_exit clearData{[&dataObjInp]{ clearDataObjInp(&dataObjInp); }};
     int savedStatus = initCondForChksum( myRodsArgs, &dataObjInp, &collInp );
 
     if ( savedStatus < 0 ) {
