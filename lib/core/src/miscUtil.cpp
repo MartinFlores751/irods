@@ -249,6 +249,7 @@ getRodsObjType( rcComm_t *conn, rodsPath_t *rodsPath ) {
             rstrcpy( rodsPath->chksum, rodsObjStatOut->chksum, NAME_LEN );
         }
     }
+    std::free(rodsPath->rodsObjStat);
     rodsPath->rodsObjStat = rodsObjStatOut;
 
     return rodsPath->objState;
