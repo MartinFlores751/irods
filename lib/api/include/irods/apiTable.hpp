@@ -823,7 +823,7 @@ static irods::apidef_t client_api_table_inp[] = {
         DATA_OBJ_CHKSUM_AN, RODS_API_VERSION, REMOTE_USER_AUTH, REMOTE_USER_AUTH,
         "DataObjInp_PI", 0, "STR_PI", 0,
         boost::any(std::function<int(rsComm_t*,dataObjInp_t*,char**)>(RS_DATA_OBJ_CHKSUM)),
-        "api_data_obj_chksum", clearDataObjInp, [](void * _p) { free(_p); } ,
+        "api_data_obj_chksum", clearDataObjInp, irods::clearOutStruct_noop,
         (funcPtr)CALL_DATAOBJINP_CHAROUT
     },
     {
