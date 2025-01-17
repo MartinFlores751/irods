@@ -560,7 +560,9 @@ auto clearRodsPathInp( rodsPathInp_t* path ) -> void {
     return;
   }
 
-  clearRodsPath(path->srcPath);
+  for (int i{}; i < path->numSrc; i++) {
+    clearRodsPath(&path->srcPath[i]);
+  }
   clearRodsPath(path->destPath);
   clearRodsPath(path->targPath);
 
@@ -572,7 +574,9 @@ auto freeRodsPathInpMembers( rodsPathInp_t* path ) -> void {
     return;
   }
 
-  clearRodsPath(path->srcPath);
+  for (int i{}; i < path->numSrc; i++) {
+    clearRodsPath(&path->srcPath[i]);
+  }
   clearRodsPath(path->destPath);
   clearRodsPath(path->targPath);
 
