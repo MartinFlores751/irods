@@ -522,7 +522,7 @@ static irods::apidef_t client_api_table_inp[] = {
         DATA_OBJ_GET_AN, RODS_API_VERSION, REMOTE_USER_AUTH, REMOTE_USER_AUTH,
         "DataObjInp_PI", 0, "PortalOprOut_PI", 1,
         boost::any(std::function<int(rsComm_t*,dataObjInp_t*,portalOprOut_t**,bytesBuf_t*)>(RS_DATA_OBJ_GET)),
-        "api_data_obj_get", clearDataObjInp, irods::clearOutStruct_noop,
+        "api_data_obj_get", clearDataObjInp, [](void* _p){ free(_p); },
         (funcPtr)CALL_DATAOBJINP_PORTALOPROUT_BYTESBUFOUT
     },
     {
