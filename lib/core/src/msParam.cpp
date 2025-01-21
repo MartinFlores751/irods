@@ -570,6 +570,10 @@ int clearMsParam(msParam_t* msParam, int freeInOutStruct)
                 clearExecCmdOut(msParam->inOutStruct);
                 std::free(msParam->inOutStruct);
             }
+	    else if (std::strcmp(msParam->type, KeyValPair_MS_T) == 0) {
+	      clearKeyVal(msParam->inOutStruct);
+	        std::free(msParam->inOutStruct);
+	    }
             // This else-block must always be the final block in this if-ladder.
             // Changing the order of these if-blocks can result in memory leaks.
             else if (freeInOutStruct > 0) {
