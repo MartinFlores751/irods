@@ -571,7 +571,7 @@ int clearMsParam(msParam_t* msParam, int freeInOutStruct)
                 std::free(msParam->inOutStruct);
             }
 	    else if (std::strcmp(msParam->type, KeyValPair_MS_T) == 0) {
-	      clearKeyVal(msParam->inOutStruct);
+	      clearKeyVal(static_cast<keyValPair_t*>(msParam->inOutStruct));
 	        std::free(msParam->inOutStruct);
 	    }
             // This else-block must always be the final block in this if-ladder.
