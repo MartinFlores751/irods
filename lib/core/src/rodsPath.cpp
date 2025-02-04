@@ -555,20 +555,6 @@ clearRodsPath( rodsPath_t *rodsPath ) {
     return;
 }
 
-auto clearRodsPathInp( rodsPathInp_t* path ) -> void {
-  if (nullptr == path) {
-    return;
-  }
-
-  for (int i{}; i < path->numSrc; i++) {
-    clearRodsPath(&path->srcPath[i]);
-    clearRodsPath(&path->targPath[i]);
-  }
-  clearRodsPath(path->destPath);
-
-  memset(path, 0, sizeof(rodsPathInp_t));
-} // clearRodsPathInp
-
 auto freeRodsPathInpMembers( rodsPathInp_t* path ) -> void {
   if (nullptr == path) {
     return;
