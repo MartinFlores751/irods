@@ -571,7 +571,7 @@ int clearMsParam(msParam_t* msParam, int freeInOutStruct)
                 std::free(msParam->inOutStruct);
             }
             // Do not free KeyValPair_MS_T unconditionally as this will lead
-            // to a use-after-free. Additionally, this behavior matches the default
+            // to a use-after-free error. Additionally, this behavior matches the default
             // of checking freeInOutStruct before freeing the data.
             else if (std::strcmp(msParam->type, KeyValPair_MS_T) == 0 && freeInOutStruct > 0) {
                 clearKeyVal(static_cast<keyValPair_t*>(msParam->inOutStruct));
