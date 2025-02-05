@@ -27,9 +27,9 @@ int chksumUtil(rcComm_t* conn,
     }
 
     collInp_t collInp{};
-    irods::at_scope_exit clearColl{[&collInp]{ clearCollInp(&collInp); }};
+    irods::at_scope_exit clearColl{[&collInp] { clearCollInp(&collInp); }};
     dataObjInp_t dataObjInp{};
-    irods::at_scope_exit clearData{[&dataObjInp]{ clearDataObjInp(&dataObjInp); }};
+    irods::at_scope_exit clearData{[&dataObjInp] { clearDataObjInp(&dataObjInp); }};
     int savedStatus = initCondForChksum( myRodsArgs, &dataObjInp, &collInp );
 
     if ( savedStatus < 0 ) {
