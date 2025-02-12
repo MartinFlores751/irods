@@ -33,6 +33,9 @@
 using log_re = irods::experimental::log::rule_engine;
 constexpr auto err_buf_len = ERR_MSG_LEN * 1024;
 
+// To clarify that ruleEngineConfig is modified throughout the execution of
+// the NREP, the variable will not be marked const.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 Cache ruleEngineConfig{};
 
 void clearRuleEngineConfig() {
