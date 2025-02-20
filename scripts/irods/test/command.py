@@ -98,9 +98,10 @@ def _assert_helper(command_arg, check_type='EMPTY', expected_results='', use_reg
         if desired_rc != rc:
             print('RETURN CODE CHECK FAILED')
             result = False
-        if rc == -signal.SIGSEGV:
-            print('!!!THERE WAS A SEGFAULT!!!')
-            result = False
+    if rc == -signal.SIGSEGV:
+        print('!!!THERE WAS A SEGFAULT!!!')
+        print('return code: [{0}]'.format(rc))
+        result = False
 
     if not result:
         print('FAILED TESTING ASSERTION\n\n')
