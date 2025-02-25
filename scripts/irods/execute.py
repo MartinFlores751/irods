@@ -48,7 +48,7 @@ def execute_command_nonblocking(args, stdout=subprocess.PIPE, stderr=subprocess.
     else:
         kwargs_without_env = kwargs
 
-    if args[0][0] == 'i' or args[0][0] == 'I':
+    if 'irods' in  args[0]:
         args = ['valgrind',
                 '--tool=memcheck',
                 '--quiet',
@@ -56,8 +56,6 @@ def execute_command_nonblocking(args, stdout=subprocess.PIPE, stderr=subprocess.
                 '--log-file=/tmp/valgrind_memcheck_%p-%n.txt',
                 '--trace-children=yes',
                 '--child-silent-after-fork=yes',
-                '--xml=yes',
-                '--xml-file=/tmp/valgrind_memcheck_%p-%n.xml',
                 '--read-inline-info=yes',
                 '--read-var-info=yes',
                 '--track-origins=yes',
