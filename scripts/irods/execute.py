@@ -48,20 +48,21 @@ def execute_command_nonblocking(args, stdout=subprocess.PIPE, stderr=subprocess.
     else:
         kwargs_without_env = kwargs
 
-    args = ['valgrind',
-            '--tool=memcheck',
-            '--quiet',
-            '--read-inline-info=yes',
-            '--log-file=/tmp/valgrind_memcheck_%p-%n.txt',
-            '--trace-children=yes',
-            '--child-silent-after-fork=yes',
-            '--xml=yes',
-            '--xml-file=/tmp/valgrind_memcheck_%p-%n.xml',
-            '--read-inline-info=yes',
-            '--read-var-info=yes',
-            '--track-origins=yes',
-            '--leak-check=no',
-            *args,]
+    if args[0][0] == 'i' or args[0][0] == 'I':
+        args = ['valgrind',
+                '--tool=memcheck',
+                '--quiet',
+                '--read-inline-info=yes',
+                '--log-file=/tmp/valgrind_memcheck_%p-%n.txt',
+                '--trace-children=yes',
+                '--child-silent-after-fork=yes',
+                '--xml=yes',
+                '--xml-file=/tmp/valgrind_memcheck_%p-%n.xml',
+                '--read-inline-info=yes',
+                '--read-var-info=yes',
+                '--track-origins=yes',
+                '--leak-check=no',
+                *args,]
 
     l.debug('Calling %s with options:\n%s', args, pprint.pformat(kwargs_without_env))
     try:
