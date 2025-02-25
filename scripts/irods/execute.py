@@ -51,7 +51,6 @@ def execute_command_nonblocking(args, stdout=subprocess.PIPE, stderr=subprocess.
     args = ['valgrind',
             '--tool=memcheck',
             '--quiet',
-            '--gen-suppressions=yes',
             '--read-inline-info=yes',
             '--log-file=/tmp/valgrind_memcheck_%p-%n.txt',
             '--trace-children=yes',
