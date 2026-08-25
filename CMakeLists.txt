@@ -57,6 +57,7 @@ set(CMAKE_SHARED_LINKER_FLAGS_INIT "-Wl,--enable-new-dtags -Wl,--as-needed")
 
 if (IRODS_ENABLE_CODE_COVERAGE)
   add_compile_options(-fprofile-instr-generate -fcoverage-mapping)
+  add_link_options(-fprofile-instr-generate -fcoverage-mapping)
 endif()
 
 if (IRODS_ENABLE_ADDRESS_SANITIZER)
