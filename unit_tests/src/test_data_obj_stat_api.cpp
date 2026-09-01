@@ -1,5 +1,8 @@
 #include <catch2/catch_all.hpp>
 
+#include <boost/uuid.hpp>
+
+#include "boost/uuid/random_generator.hpp"
 #include "irods/client_connection.hpp"
 #include "irods/connection_pool.hpp"
 #include "irods/data_object_modify_info.h"
@@ -11,22 +14,27 @@
 #include "irods/irods_pack_table.hpp"
 #include "irods/rodsClient.h"
 #include "irods/rodsErrorTable.h"
+#include "irods/touch.h"
 #include "irods/transport/default_transport.hpp"
 
-TEST_CASE("data_object_modify_info")
-{
-    namespace fs = irods::experimental::filesystem;
-    namespace io = irods::experimental::io;
+#include "irods/resource_administration.hpp"
 
-    auto& api_table = irods::get_client_api_table();
-    auto& pack_table = irods::get_pack_table();
-    init_api_table(api_table, pack_table);
+#include <array>
+#include <climits>
+#include <filesystem>
 
-    auto conn_pool = irods::make_connection_pool();
-    auto conn = conn_pool->get_connection();
+namespace fs = irods::experimental::filesystem;
+namespace io = irods::experimental::io;
+namespace adm = irods::experimental::administration;
+
+TEST_CASE("data_obj_stat_api")
+{    
+    load_client_api_plugins();
 
     rodsEnv env;
     _getRodsEnv(env);
+
+    irods::experimental::client_connection conn;
 
     const auto sandbox = fs::path{env.rodsHome} / "irods_unit_tests_sandbox";
     const auto path = sandbox / "dstream_data_object.txt";
@@ -38,79 +46,170 @@ TEST_CASE("data_object_modify_info")
     }};
 
     // Create a data object in iRODS.
+    // This is used in all future sections.
     {
         io::client::default_transport tp{conn};
         io::odstream out{tp, path};
     }
 
-    dataObjInfo_t info{};
-    std::strcpy(info.objPath, path.c_str());
-
-    const auto invalid_keywords = {
-        CHKSUM_KW,
-        COLL_ID_KW,
-        //DATA_COMMENTS_KW,
-        DATA_CREATE_KW,
-        //DATA_EXPIRY_KW,
-        DATA_ID_KW,
-        DATA_MAP_ID_KW,
-        DATA_MODE_KW,
-        //DATA_MODIFY_KW,
-        DATA_NAME_KW,
-        DATA_OWNER_KW,
-        DATA_OWNER_ZONE_KW,
-        //DATA_RESC_GROUP_NAME_KW, // Not defined.
-        DATA_SIZE_KW,
-        //DATA_TYPE_KW,
-        FILE_PATH_KW,
-        REPL_NUM_KW,
-        REPL_STATUS_KW,
-        RESC_HIER_STR_KW,
-        RESC_ID_KW,
-        RESC_NAME_KW,
-        STATUS_STRING_KW,
-        VERSION_KW
-    };
-
-    for (auto&& kw : invalid_keywords) {
-        DYNAMIC_SECTION("error on invalid keyword [" << kw << ']')
-        {
-            keyValPair_t reg_params{};
-            addKeyVal(&reg_params, kw, "");
-
-            modDataObjMeta_t input{};
-            input.dataObjInfo = &info;
-            input.regParam = &reg_params;
-
-            REQUIRE(rc_data_object_modify_info(static_cast<rcComm_t*>(conn), &input) == USER_BAD_KEYWORD_ERR);
-        }
+    // Just ensure you can get something in a stat
+    SECTION("Stat on good data object") {
+        REQUIRE_NOTHROW(fs::client::status(conn, path));
     }
+
+    namespace adm = irods::experimental::administration;
+
+    // Get hostname for unixfilesystem resources
+    std::array<char, HOST_NAME_MAX+1> hostname{};
+    REQUIRE(gethostname(hostname.data(), hostname.size()) == 0);
+
+    // Sanity check
+    // Make sure the hostname buffer is null terminated
+    REQUIRE(hostname.back() == '\0');
+
+    auto create_temp_directory{[](std::string_view _dir_name) -> std::filesystem::path {
+        const auto temp_path{std::filesystem::temp_directory_path()};
+        auto path_to_create{temp_path / _dir_name};
+        std::filesystem::create_directory(path_to_create);
+        return path_to_create;
+    }};
+
+    // Create some temp directories for the resources
+    const auto res_a_path{create_temp_directory("cool")};
+    const auto res_b_path{create_temp_directory("thing")};
+
+    // Cleanup the temp directories
+    irods::at_scope_exit remove_temp_directories{[&](){
+        std::filesystem::remove_all(res_b_path);
+        std::filesystem::remove_all(res_a_path);
+    }};
+
+    // Create resources
+    // Should you even test for no throw here?
+    const adm::resource_registration_info res_regis_a{.resource_name="cool", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_a_path.string()};
+    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_a));
+
+    const adm::resource_registration_info res_regis_b{.resource_name="thing", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_b_path.string()};
+    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_b));
+
+    const adm::resource_registration_info res_regis_repl{.resource_name="repl", .resource_type=adm::resource_type::replication};
+    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_repl));
+
+    const adm::resource_registration_info res_regis_pt{.resource_name="pt", .resource_type=adm::resource_type::passthrough};
+    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_pt));
+
+    // Cleanup the resources
+    irods::at_scope_exit clean_resources{[&](){
+        adm::client::remove_resource(conn, res_regis_pt.resource_name);
+        adm::client::remove_resource(conn, res_regis_repl.resource_name);
+        adm::client::remove_resource(conn, res_regis_b.resource_name);
+        adm::client::remove_resource(conn, res_regis_a.resource_name);
+    }};
+
+    // // Close connection and create new one to "commit" previous actions
+    conn.disconnect();
+    conn.connect();
+
+    // Create the hierarchy
+    REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name));
+    REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name));
+    REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name));
+
+    // Destruct the hierarchy
+    irods::at_scope_exit unlink_resource_hierarchy{[&](){
+        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name);
+        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name);
+        adm::client::remove_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name);
+    }};
+
+    const auto bleh{sandbox / "cool-cool-epic.txt"};
+    {
+        io::client::default_transport tp{conn};
+        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
+    }
+
+    // TOOD: Use bad status? (-1)
 }
 
-TEST_CASE("#7338")
-{
-    load_client_api_plugins();
+struct TestFixture {
+    TestFixture() : {
+        load_client_api_plugins();
 
-    irods::experimental::client_connection conn{irods::experimental::defer_authentication};
+        // Get hostname for unixfilesystem resources
+        std::array<char, HOST_NAME_MAX+1> hostname{};
+        REQUIRE(gethostname(hostname.data(), hostname.size()) == 0);
 
-    modDataObjMeta_t input{};
-    CHECK(rc_data_object_modify_info(static_cast<RcComm*>(conn), &input) == SYS_NO_API_PRIV);
+        // Sanity check
+        // Make sure the hostname buffer is null terminated
+        REQUIRE(hostname.back() == '\0');
+
+        auto create_temp_directory{[](std::string_view _dir_name) -> std::filesystem::path {
+            const auto temp_path{std::filesystem::temp_directory_path()};
+            auto path_to_create{temp_path / _dir_name};
+            std::filesystem::create_directory(path_to_create);
+            return path_to_create;
+        }};
+
+        // Create some temp directories for the resources
+        const auto res_a_path{create_temp_directory("cool")};
+        const auto res_b_path{create_temp_directory("thing")};
+
+        // Create resources
+        // Should you even test for no throw here?
+        const adm::resource_registration_info res_regis_a{.resource_name="cool", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_a_path.string()};
+        REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_a));
+
+        const adm::resource_registration_info res_regis_b{.resource_name="thing", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_b_path.string()};
+        REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_b));
+
+        const adm::resource_registration_info res_regis_repl{.resource_name="repl", .resource_type=adm::resource_type::replication};
+        REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_repl));
+
+        const adm::resource_registration_info res_regis_pt{.resource_name="pt", .resource_type=adm::resource_type::passthrough};
+        REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_pt));
+        
+        // Close connection and create new one to "commit" previous actions
+        conn.disconnect();
+        conn.connect();
+
+        // Create the hierarchy
+        REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name));
+        REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name));
+        REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name));
+    }
+
+    ~TestFixture() {
+        // Cleanup all of the files
+        fs::client::remove_all(conn, sandbox, fs::remove_options::no_trash);
+
+        // Destruct the hierarchy
+        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name);
+        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name);
+        adm::client::remove_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name);
+
+        // Cleanup the resources
+        adm::client::remove_resource(conn, res_regis_pt.resource_name);
+        adm::client::remove_resource(conn, res_regis_repl.resource_name);
+        adm::client::remove_resource(conn, res_regis_b.resource_name);
+        adm::client::remove_resource(conn, res_regis_a.resource_name);
+
+        // Cleanup the temp directories
+        std::filesystem::remove_all(res_b_path);
+        std::filesystem::remove_all(res_a_path);
+    }
+    
+    boost::uuids::uuid test_uuid;
+    irods::experimental::client_connection conn;
 }
 
-TEST_CASE("null inputs are checked")
-{
-    load_client_api_plugins();
+TEST_CASE_METHOD(TestFixture, "Stat on data object with only good replicas") {
+    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
+}
 
-    modDataObjMeta_t input{};
+TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good replicas") {
+    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
+}
 
-    // The RcComm must not be null.
-    CHECK(INVALID_INPUT_ARGUMENT_NULL_POINTER == rc_data_object_modify_info(nullptr, &input));
-
-    irods::experimental::client_connection conn; // NOLINT(misc-const-correctness)
-
-    // The input structure must not be null.
-    CHECK(INVALID_INPUT_ARGUMENT_NULL_POINTER == rc_data_object_modify_info(static_cast<RcComm*>(conn), nullptr));
-
-    // The input structure must have a valid regParam member.
-    CHECK(USER_BAD_KEYWORD_ERR == rc_data_object_modify_info(static_cast<RcComm*>(conn), &input));
+TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas") {
+    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
 }
