@@ -24,7 +24,6 @@
 #include "irods/touch.h"
 #include "irods/transport/default_transport.hpp"
 
-
 #include <boost/asio/ip/host_name.hpp>
 #include "boost/uuid/random_generator.hpp"
 #include <boost/uuid/uuid.hpp>
@@ -52,12 +51,17 @@ auto stat(RcComm& _comm, const fs::path& _path) -> std::unique_ptr<rodsObjStat, 
     return {output, freeRodsObjStat};
 }
 
-auto set_replica_status(RcComm& _comm, const fs::path& _path, int replica, int status, const std::unordered_map<std::string, std::string>& _additional_kvp_args) -> int {
+auto set_replica_status(RcComm& _comm,
+                        const fs::path& _path,
+                        int replica,
+                        int status,
+                        const std::unordered_map<std::string, std::string>& _additional_kvp_args) -> int
+{
     auto [kvp, lm] = irods::experimental::make_key_value_proxy();
     kvp[REPL_STATUS_KW] = std::to_string(status);
     kvp[ADMIN_KW] = "";
 
-    std::for_each(std::cbegin(_additional_kvp_args), std::cend(_additional_kvp_args), [&kvp](auto& _thing){
+    std::for_each(std::cbegin(_additional_kvp_args), std::cend(_additional_kvp_args), [&kvp](auto& _thing) {
         kvp[_thing.first] = _thing.second;
     });
 
@@ -72,7 +76,7 @@ auto set_replica_status(RcComm& _comm, const fs::path& _path, int replica, int s
 }
 
 TEST_CASE("Stat on single data object")
-{    
+{
     load_client_api_plugins();
 
     rodsEnv env;
@@ -85,9 +89,8 @@ TEST_CASE("Stat on single data object")
 
     fs::client::create_collection(conn, sandbox);
 
-    irods::at_scope_exit cleanup{[&] {
-        fs::client::remove_all(conn.operator RcComm&(), sandbox, fs::remove_options::no_trash);
-    }};
+    irods::at_scope_exit cleanup{
+        [&] { fs::client::remove_all(conn.operator RcComm&(), sandbox, fs::remove_options::no_trash); }};
 
     // Create a data object in iRODS.
     // This is used in all future sections.
@@ -100,7 +103,8 @@ TEST_CASE("Stat on single data object")
     REQUIRE(res->objSize == 0);
 }
 
-struct TestFixture {
+struct TestFixture
+{
     // Ignore member variable complaints for now
     // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
     // UUID for ensuring uniqueness of paths and resources
@@ -129,12 +133,17 @@ struct TestFixture {
     auto operator=(TestFixture&&) -> TestFixture = delete;
     TestFixture(TestFixture&&) = delete;
 
-    static auto generate_uuid() -> std::string {
+    static auto generate_uuid() -> std::string
+    {
         static boost::uuids::random_generator gen;
         return to_string(gen());
     }
 
-    TestFixture() : env{}, test_uui{generate_uuid()}, conn{irods::experimental::defer_connection} {
+    TestFixture()
+        : env{}
+        , test_uui{generate_uuid()}
+        , conn{irods::experimental::defer_connection}
+    {
         // No idea if this is needed per run?
         load_client_api_plugins();
         _getRodsEnv(env);
@@ -143,7 +152,7 @@ struct TestFixture {
 
         sandbox = fs::path{static_cast<char*>(env.rodsHome)} / fmt::format("irods_unit_test_sandbox-{}", test_uui);
         fs::client::create_collection(conn, sandbox);
- 
+
         // Get hostname for unixfilesystem resources
         auto hostname{boost::asio::ip::host_name()};
 
@@ -170,9 +179,11 @@ struct TestFixture {
                        .host_name = hostname,
                        .vault_path = res_b_path.string()};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_b));
-        res_regis_repl = {.resource_name = fmt::format("repl-{}", test_uui), .resource_type = adm::resource_type::replication};
+        res_regis_repl = {
+            .resource_name = fmt::format("repl-{}", test_uui), .resource_type = adm::resource_type::replication};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_repl));
-        res_regis_pt = {.resource_name = fmt::format("pt-{}", test_uui), .resource_type = adm::resource_type::passthrough};
+        res_regis_pt = {
+            .resource_name = fmt::format("pt-{}", test_uui), .resource_type = adm::resource_type::passthrough};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_pt));
 
         // Close connection and create new one to "commit" previous actions
@@ -180,7 +191,8 @@ struct TestFixture {
         conn.connect();
 
         // Create the hierarchy
-        REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name));
+        REQUIRE_NOTHROW(
+            adm::client::add_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name));
         REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name));
         REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name));
 
@@ -195,7 +207,8 @@ struct TestFixture {
         }
     }
 
-    ~TestFixture() {
+    ~TestFixture()
+    {
         // Reset connection jic!
         conn.disconnect();
         conn.connect();
@@ -220,13 +233,14 @@ struct TestFixture {
     }
 };
 
-
-TEST_CASE_METHOD(TestFixture, "Stat on data object with only good replicas") {
+TEST_CASE_METHOD(TestFixture, "Stat on data object with only good replicas")
+{
     auto res{stat(conn, test_file)};
     REQUIRE(res->objSize == 0);
 }
 
-TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good replicas") {
+TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good replicas")
+{
     constexpr rodsLong_t bad_size{10};
     auto& comm{static_cast<RcComm&>(conn)};
     REQUIRE(set_replica_status(comm, test_file, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
@@ -238,7 +252,8 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good rep
     REQUIRE(res->objSize != bad_size);
 }
 
-TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas") {\
+TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas")
+{
     constexpr rodsLong_t bad_size_one{10};
     auto& comm{static_cast<RcComm&>(conn)};
     REQUIRE(set_replica_status(comm, test_file, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >= 0);
@@ -253,7 +268,8 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas") {\
     REQUIRE(res->objSize != bad_size_two);
 }
 
-TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status") {
+TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status")
+{
     constexpr rodsLong_t bad_size{10};
     constexpr auto bad_status{42};
     auto& comm{static_cast<RcComm&>(conn)};
@@ -266,15 +282,18 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status") {
     REQUIRE(res->objSize != bad_size);
 }
 
-TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status") {
+TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status")
+{
     constexpr rodsLong_t bad_size_one{10};
     constexpr auto bad_status_one{42};
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(set_replica_status(comm, test_file, 0, bad_status_one, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >= 0);
+    REQUIRE(set_replica_status(comm, test_file, 0, bad_status_one, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >=
+            0);
 
     constexpr rodsLong_t bad_size_two{20};
     constexpr auto bad_status_two{56709};
-    REQUIRE(set_replica_status(comm, test_file, 1, bad_status_two, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
+    REQUIRE(set_replica_status(comm, test_file, 1, bad_status_two, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >=
+            0);
 
     auto res{stat(conn, test_file)};
 
