@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <catch2/catch_all.hpp>
 
-#include <boost/uuid.hpp>
-
+#include <boost/asio/ip/host_name.hpp>
 #include "boost/uuid/random_generator.hpp"
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
 #include "irods/client_connection.hpp"
 #include "irods/connection_pool.hpp"
 #include "irods/data_object_modify_info.h"
@@ -12,8 +14,17 @@
 #include "irods/irods_at_scope_exit.hpp"
 #include "irods/irods_client_api_table.hpp"
 #include "irods/irods_pack_table.hpp"
+#include "irods/key_value_proxy.hpp"
+#include "irods/modDataObjMeta.h"
+#include "irods/objInfo.h"
+#include "irods/objStat.h"
+#include "irods/rcConnect.h"
+#include "irods/rcMisc.h"
 #include "irods/rodsClient.h"
+#include "irods/rodsDef.h"
 #include "irods/rodsErrorTable.h"
+#include "irods/rodsKeyWdDef.h"
+#include "irods/rodsType.h"
 #include "irods/touch.h"
 #include "irods/transport/default_transport.hpp"
 
@@ -22,6 +33,8 @@
 #include <array>
 #include <climits>
 #include <filesystem>
+#include <memory>
+#include <string>
 
 namespace fs = irods::experimental::filesystem;
 namespace io = irods::experimental::io;
@@ -42,7 +55,7 @@ TEST_CASE("data_obj_stat_api")
     fs::client::create_collection(conn, sandbox);
 
     irods::at_scope_exit cleanup{[&] {
-        fs::client::remove_all(conn, sandbox, fs::remove_options::no_trash);
+        fs::client::remove_all(conn.operator RcComm&(), sandbox, fs::remove_options::no_trash);
     }};
 
     // Create a data object in iRODS.
@@ -56,92 +69,53 @@ TEST_CASE("data_obj_stat_api")
     SECTION("Stat on good data object") {
         REQUIRE_NOTHROW(fs::client::status(conn, path));
     }
-
-    namespace adm = irods::experimental::administration;
-
-    // Get hostname for unixfilesystem resources
-    std::array<char, HOST_NAME_MAX+1> hostname{};
-    REQUIRE(gethostname(hostname.data(), hostname.size()) == 0);
-
-    // Sanity check
-    // Make sure the hostname buffer is null terminated
-    REQUIRE(hostname.back() == '\0');
-
-    auto create_temp_directory{[](std::string_view _dir_name) -> std::filesystem::path {
-        const auto temp_path{std::filesystem::temp_directory_path()};
-        auto path_to_create{temp_path / _dir_name};
-        std::filesystem::create_directory(path_to_create);
-        return path_to_create;
-    }};
-
-    // Create some temp directories for the resources
-    const auto res_a_path{create_temp_directory("cool")};
-    const auto res_b_path{create_temp_directory("thing")};
-
-    // Cleanup the temp directories
-    irods::at_scope_exit remove_temp_directories{[&](){
-        std::filesystem::remove_all(res_b_path);
-        std::filesystem::remove_all(res_a_path);
-    }};
-
-    // Create resources
-    // Should you even test for no throw here?
-    const adm::resource_registration_info res_regis_a{.resource_name="cool", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_a_path.string()};
-    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_a));
-
-    const adm::resource_registration_info res_regis_b{.resource_name="thing", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_b_path.string()};
-    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_b));
-
-    const adm::resource_registration_info res_regis_repl{.resource_name="repl", .resource_type=adm::resource_type::replication};
-    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_repl));
-
-    const adm::resource_registration_info res_regis_pt{.resource_name="pt", .resource_type=adm::resource_type::passthrough};
-    REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_pt));
-
-    // Cleanup the resources
-    irods::at_scope_exit clean_resources{[&](){
-        adm::client::remove_resource(conn, res_regis_pt.resource_name);
-        adm::client::remove_resource(conn, res_regis_repl.resource_name);
-        adm::client::remove_resource(conn, res_regis_b.resource_name);
-        adm::client::remove_resource(conn, res_regis_a.resource_name);
-    }};
-
-    // // Close connection and create new one to "commit" previous actions
-    conn.disconnect();
-    conn.connect();
-
-    // Create the hierarchy
-    REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name));
-    REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name));
-    REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name));
-
-    // Destruct the hierarchy
-    irods::at_scope_exit unlink_resource_hierarchy{[&](){
-        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name);
-        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name);
-        adm::client::remove_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name);
-    }};
-
-    const auto bleh{sandbox / "cool-cool-epic.txt"};
-    {
-        io::client::default_transport tp{conn};
-        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
-    }
-
-    // TOOD: Use bad status? (-1)
 }
 
 struct TestFixture {
-    TestFixture() : {
+    // Ignore member variable complaints for now
+    // NOLINTBEGIN(misc-non-private-member-variables-in-classes)
+    // UUID for ensuring uniqueness of paths and resources
+    rodsEnv env;
+    std::string test_uui;
+
+    irods::experimental::client_connection conn;
+
+    // Filesystem paths for the tests
+    // Also includes paths for the new resources
+    fs::path sandbox;
+    std::filesystem::path res_a_path;
+    std::filesystem::path res_b_path;
+
+    // Resource info for the heirarchy
+    adm::resource_registration_info res_regis_a;
+    adm::resource_registration_info res_regis_b;
+    adm::resource_registration_info res_regis_repl;
+    adm::resource_registration_info res_regis_pt;
+    // NOLINTEND(misc-non-private-member-variables-in-classes)
+
+    // Make clang happy with the class
+    auto operator=(TestFixture&) -> TestFixture = delete;
+    TestFixture(TestFixture&) = delete;
+    auto operator=(TestFixture&&) -> TestFixture = delete;
+    TestFixture(TestFixture&&) = delete;
+
+    static auto generate_uuid() -> std::string {
+        static boost::uuids::random_generator gen;
+        return to_string(gen());
+    }
+
+    TestFixture() : env{}, test_uui{generate_uuid()}, conn{irods::experimental::defer_connection} {
+        // No idea if this is needed per run?
         load_client_api_plugins();
+        _getRodsEnv(env);
 
+        conn.connect();
+
+        sandbox = fs::path{static_cast<char*>(env.rodsHome)} / fmt::format("irods_unit_test_sandbox-{}", test_uui);
+        fs::client::create_collection(conn, sandbox);
+ 
         // Get hostname for unixfilesystem resources
-        std::array<char, HOST_NAME_MAX+1> hostname{};
-        REQUIRE(gethostname(hostname.data(), hostname.size()) == 0);
-
-        // Sanity check
-        // Make sure the hostname buffer is null terminated
-        REQUIRE(hostname.back() == '\0');
+        auto hostname{boost::asio::ip::host_name()};
 
         auto create_temp_directory{[](std::string_view _dir_name) -> std::filesystem::path {
             const auto temp_path{std::filesystem::temp_directory_path()};
@@ -151,23 +125,26 @@ struct TestFixture {
         }};
 
         // Create some temp directories for the resources
-        const auto res_a_path{create_temp_directory("cool")};
-        const auto res_b_path{create_temp_directory("thing")};
+        res_a_path = create_temp_directory(fmt::format("cool-{}", test_uui));
+        res_b_path = create_temp_directory(fmt::format("thing-{}", test_uui));
 
         // Create resources
         // Should you even test for no throw here?
-        const adm::resource_registration_info res_regis_a{.resource_name="cool", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_a_path.string()};
+        res_regis_a = {.resource_name = fmt::format("cool-{}", test_uui),
+                       .resource_type = adm::resource_type::unixfilesystem,
+                       .host_name = hostname,
+                       .vault_path = res_a_path.string()};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_a));
-
-        const adm::resource_registration_info res_regis_b{.resource_name="thing", .resource_type=adm::resource_type::unixfilesystem, .host_name=hostname.data(), .vault_path=res_b_path.string()};
+        res_regis_b = {.resource_name = fmt::format("thing-{}", test_uui),
+                       .resource_type = adm::resource_type::unixfilesystem,
+                       .host_name = hostname,
+                       .vault_path = res_b_path.string()};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_b));
-
-        const adm::resource_registration_info res_regis_repl{.resource_name="repl", .resource_type=adm::resource_type::replication};
+        res_regis_repl = {.resource_name = fmt::format("repl-{}", test_uui), .resource_type = adm::resource_type::replication};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_repl));
-
-        const adm::resource_registration_info res_regis_pt{.resource_name="pt", .resource_type=adm::resource_type::passthrough};
+        res_regis_pt = {.resource_name = fmt::format("pt-{}", test_uui), .resource_type = adm::resource_type::passthrough};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_pt));
-        
+
         // Close connection and create new one to "commit" previous actions
         conn.disconnect();
         conn.connect();
@@ -176,13 +153,21 @@ struct TestFixture {
         REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name));
         REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name));
         REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name));
+
+        // Reset connection jic!
+        conn.disconnect();
+        conn.connect();
     }
 
     ~TestFixture() {
+        // Reset connection jic!
+        conn.disconnect();
+        conn.connect();
+
         // Cleanup all of the files
         fs::client::remove_all(conn, sandbox, fs::remove_options::no_trash);
 
-        // Destruct the hierarchy
+        // Unlink the hierarchy
         adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name);
         adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name);
         adm::client::remove_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name);
@@ -197,19 +182,218 @@ struct TestFixture {
         std::filesystem::remove_all(res_b_path);
         std::filesystem::remove_all(res_a_path);
     }
-    
-    boost::uuids::uuid test_uuid;
-    irods::experimental::client_connection conn;
+};
+
+auto stat(RcComm& _comm, const fs::path& _path) -> std::unique_ptr<rodsObjStat, decltype(freeRodsObjStat)*>
+{
+    dataObjInp_t input{};
+    std::strncpy(input.objPath, _path.c_str(), std::strlen(_path.c_str()));
+
+    rodsObjStat* output{};
+
+    REQUIRE(rcObjStat(&_comm, &input, &output) >= 0);
+    return {output, freeRodsObjStat};
 }
 
+auto set_replica_status(RcComm& _comm, const fs::path& _path, int replica, int status, const std::unordered_map<std::string, std::string>& _additional_kvp_args) -> int {
+    // Try to figure out the replica keywords...
+    auto [kvp, lm] = irods::experimental::make_key_value_proxy();
+    kvp[REPL_STATUS_KW] = std::to_string(status);
+    kvp[ADMIN_KW] = "";
+
+    std::for_each(std::cbegin(_additional_kvp_args), std::cend(_additional_kvp_args), [&kvp](auto& _thing){
+        kvp[_thing.first] = _thing.second;
+    });
+
+    // Specify the data object we want to mess with
+    // We might be able to reuse the previous data obj inf?
+    DataObjInfo info_two{};
+    std::strncpy(static_cast<char*>(info_two.objPath), _path.c_str(), MAX_NAME_LEN - 1);
+    info_two.replNum = replica;
+
+    // Create the required input
+    ModDataObjMetaInp inp_two{&info_two, kvp.get()};
+    return rcModDataObjMeta(&_comm, &inp_two);
+}
+
+
 TEST_CASE_METHOD(TestFixture, "Stat on data object with only good replicas") {
+    const auto bleh{sandbox / "cool-cool-epic.txt"};
+    {
+        io::client::default_transport tp{conn};
+        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
+    }
+
     REQUIRE_NOTHROW(fs::client::status(conn, bleh));
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good replicas") {
-    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
+    const auto bleh{sandbox / "cool-cool-epic.txt"};
+    {
+        io::client::default_transport tp{conn};
+        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
+    }
+
+    // Try to figure out the replica keywords...
+    auto [kvp, lm] = irods::experimental::make_key_value_proxy();
+    kvp[REPL_STATUS_KW] = std::to_string(STALE_REPLICA);
+    kvp[ADMIN_KW] = "";
+    constexpr rodsLong_t bad_size{10};
+    kvp[DATA_SIZE_KW] = std::to_string(bad_size); // Assign arbitrary value to data size
+
+    // Specify the data object we want to mess with
+    DataObjInfo info{};
+    std::strncpy(static_cast<char*>(info.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
+    info.replNum = 0;
+
+    // Create the required input
+    ModDataObjMetaInp inp{&info, kvp.get()};
+
+    auto& comm{static_cast<RcComm&>(conn)};
+    REQUIRE(set_replica_status(comm, bleh, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}));
+    REQUIRE(rcModDataObjMeta(&comm, &inp) >= 0);
+
+    auto res{stat(conn, bleh)};
+
+    // We expect the good replica size
+    REQUIRE(res->objSize == 0);
+    REQUIRE(res->objSize != bad_size);
 }
 
-TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas") {
+TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas") {\
+    const auto bleh{sandbox / "cool-cool-epic.txt"};
+    {
+        io::client::default_transport tp{conn};
+        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
+    }
+
+    // Try to figure out the replica keywords...
+    auto [kvp_one, lm_one] = irods::experimental::make_key_value_proxy();
+    kvp_one[REPL_STATUS_KW] = std::to_string(STALE_REPLICA);
+    kvp_one[ADMIN_KW] = "";
+    constexpr rodsLong_t bad_size_one{10};
+    kvp_one[DATA_SIZE_KW] = std::to_string(bad_size_one); // Assign arbitrary value to data size
+
+    // Specify the data object we want to mess with
+    DataObjInfo info_one{};
+    std::strncpy(static_cast<char*>(info_one.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
+    info_one.replNum = 0;
+
+    // Create the required input
+    ModDataObjMetaInp inp_one{&info_one, kvp_one.get()};
+
+    auto& comm{static_cast<RcComm&>(conn)};
+    REQUIRE(rcModDataObjMeta(&comm, &inp_one) >= 0);
+
+    // Try to figure out the replica keywords...
+    auto [kvp_two, lm_two] = irods::experimental::make_key_value_proxy();
+    kvp_two[REPL_STATUS_KW] = std::to_string(STALE_REPLICA);
+    kvp_two[ADMIN_KW] = "";
+    constexpr rodsLong_t bad_size_two{20};
+    kvp_two[DATA_SIZE_KW] = std::to_string(bad_size_two); // Assign arbitrary value to data size
+
+    // Specify the data object we want to mess with
+    // We might be able to reuse the previous data obj inf?
+    DataObjInfo info_two{};
+    std::strncpy(static_cast<char*>(info_two.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
+    info_two.replNum = 1;
+
+    // Create the required input
+    ModDataObjMetaInp inp_two{&info_two, kvp_two.get()};
+    REQUIRE(rcModDataObjMeta(&comm, &inp_two) >= 0);
+
     REQUIRE_NOTHROW(fs::client::status(conn, bleh));
+
+
+    auto res{stat(conn, bleh)};
+
+    // We expect the first replica to give the stat when both replicas are stale
+    REQUIRE(res->objSize == bad_size_one);
+    REQUIRE(res->objSize != bad_size_two);
+}
+
+TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status") {
+    const auto bleh{sandbox / "cool-cool-epic.txt"};
+    {
+        io::client::default_transport tp{conn};
+        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
+    }
+
+    // Try to figure out the replica keywords...
+    auto [kvp, lm] = irods::experimental::make_key_value_proxy();
+    kvp[REPL_STATUS_KW] = std::to_string(25); // Just an arbitrary number
+    kvp[ADMIN_KW] = "";
+    constexpr rodsLong_t bad_size{10};
+    kvp[DATA_SIZE_KW] = std::to_string(bad_size); // Assign arbitrary value to data size
+
+    // Specify the data object we want to mess with
+    DataObjInfo info{};
+    std::strncpy(static_cast<char*>(info.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
+    info.replNum = 0;
+
+    // Create the required input
+    ModDataObjMetaInp inp{&info, kvp.get()};
+
+    auto& comm{static_cast<RcComm&>(conn)};
+    REQUIRE(rcModDataObjMeta(&comm, &inp) >= 0);
+
+    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
+
+    auto res{stat(conn, bleh)};
+
+    // We expect to have the size of the good replica
+    REQUIRE(res->objSize == 0);
+    REQUIRE(res->objSize != bad_size);
+}
+
+TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status") {
+    const auto bleh{sandbox / "cool-cool-epic.txt"};
+    {
+        io::client::default_transport tp{conn};
+        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
+    }
+
+    // Try to figure out the replica keywords...
+    auto [kvp_one, lm_one] = irods::experimental::make_key_value_proxy();
+    constexpr auto random_number{42};
+    kvp_one[REPL_STATUS_KW] = std::to_string(random_number);
+    kvp_one[ADMIN_KW] = "";
+    constexpr rodsLong_t bad_size_one{10};
+    kvp_one[DATA_SIZE_KW] = std::to_string(bad_size_one); // Assign arbitrary value to data size
+
+    // Specify the data object we want to mess with
+    DataObjInfo info_one{};
+    std::strncpy(static_cast<char*>(info_one.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
+    info_one.replNum = 0;
+
+    // Create the required input
+    ModDataObjMetaInp inp_one{&info_one, kvp_one.get()};
+
+    auto& comm{static_cast<RcComm&>(conn)};
+    REQUIRE(rcModDataObjMeta(&comm, &inp_one) >= 0);
+
+    // Try to figure out the replica keywords...
+    auto [kvp_two, lm_two] = irods::experimental::make_key_value_proxy();
+    constexpr auto different_random_number{56709};
+    kvp_two[REPL_STATUS_KW] = std::to_string(different_random_number);
+    kvp_two[ADMIN_KW] = "";
+    constexpr rodsLong_t bad_size_two{20};
+    kvp_two[DATA_SIZE_KW] = std::to_string(bad_size_two); // Assign arbitrary value to data size
+
+    // Specify the data object we want to mess with
+    // We might be able to reuse the previous data obj inf?
+    DataObjInfo info_two{};
+    std::strncpy(static_cast<char*>(info_two.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
+    info_two.replNum = 1;
+
+    // Create the required input
+    ModDataObjMetaInp inp_two{&info_two, kvp_two.get()};
+    REQUIRE(rcModDataObjMeta(&comm, &inp_two) >= 0);
+
+    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
+    auto res{stat(conn, bleh)};
+
+    // We expect the first replica to give the stat when both replicas are stale
+    REQUIRE(res->objSize == bad_size_one);
+    REQUIRE(res->objSize != bad_size_two);
 }
