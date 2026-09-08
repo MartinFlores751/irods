@@ -1,10 +1,5 @@
-#include <algorithm>
 #include <catch2/catch_all.hpp>
 
-#include <boost/asio/ip/host_name.hpp>
-#include "boost/uuid/random_generator.hpp"
-#include <boost/uuid/uuid.hpp>
-#include <boost/uuid/uuid_io.hpp>
 #include "irods/client_connection.hpp"
 #include "irods/connection_pool.hpp"
 #include "irods/data_object_modify_info.h"
@@ -20,6 +15,7 @@
 #include "irods/objStat.h"
 #include "irods/rcConnect.h"
 #include "irods/rcMisc.h"
+#include "irods/resource_administration.hpp"
 #include "irods/rodsClient.h"
 #include "irods/rodsDef.h"
 #include "irods/rodsErrorTable.h"
@@ -28,8 +24,13 @@
 #include "irods/touch.h"
 #include "irods/transport/default_transport.hpp"
 
-#include "irods/resource_administration.hpp"
 
+#include <boost/asio/ip/host_name.hpp>
+#include "boost/uuid/random_generator.hpp"
+#include <boost/uuid/uuid.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
+#include <algorithm>
 #include <array>
 #include <climits>
 #include <filesystem>
@@ -40,7 +41,37 @@ namespace fs = irods::experimental::filesystem;
 namespace io = irods::experimental::io;
 namespace adm = irods::experimental::administration;
 
-TEST_CASE("data_obj_stat_api")
+auto stat(RcComm& _comm, const fs::path& _path) -> std::unique_ptr<rodsObjStat, decltype(freeRodsObjStat)*>
+{
+    dataObjInp_t input{};
+    std::strncpy(static_cast<char*>(input.objPath), _path.c_str(), std::strlen(_path.c_str()));
+
+    rodsObjStat* output{};
+
+    REQUIRE(rcObjStat(&_comm, &input, &output) >= 0);
+    return {output, freeRodsObjStat};
+}
+
+auto set_replica_status(RcComm& _comm, const fs::path& _path, int replica, int status, const std::unordered_map<std::string, std::string>& _additional_kvp_args) -> int {
+    auto [kvp, lm] = irods::experimental::make_key_value_proxy();
+    kvp[REPL_STATUS_KW] = std::to_string(status);
+    kvp[ADMIN_KW] = "";
+
+    std::for_each(std::cbegin(_additional_kvp_args), std::cend(_additional_kvp_args), [&kvp](auto& _thing){
+        kvp[_thing.first] = _thing.second;
+    });
+
+    // Specify the data object we want to mess with
+    DataObjInfo info_two{};
+    std::strncpy(static_cast<char*>(info_two.objPath), _path.c_str(), MAX_NAME_LEN - 1);
+    info_two.replNum = replica;
+
+    // Create the required input
+    ModDataObjMetaInp inp_two{&info_two, kvp.get()};
+    return rcModDataObjMeta(&_comm, &inp_two);
+}
+
+TEST_CASE("Stat on single data object")
 {    
     load_client_api_plugins();
 
@@ -49,7 +80,7 @@ TEST_CASE("data_obj_stat_api")
 
     irods::experimental::client_connection conn;
 
-    const auto sandbox = fs::path{env.rodsHome} / "irods_unit_tests_sandbox";
+    const auto sandbox = fs::path{static_cast<char*>(env.rodsHome)} / "irods_unit_tests_sandbox";
     const auto path = sandbox / "dstream_data_object.txt";
 
     fs::client::create_collection(conn, sandbox);
@@ -61,14 +92,12 @@ TEST_CASE("data_obj_stat_api")
     // Create a data object in iRODS.
     // This is used in all future sections.
     {
-        io::client::default_transport tp{conn};
-        io::odstream out{tp, path};
+        io::client::default_transport transport{conn};
+        io::odstream out{transport, path};
     }
 
-    // Just ensure you can get something in a stat
-    SECTION("Stat on good data object") {
-        REQUIRE_NOTHROW(fs::client::status(conn, path));
-    }
+    auto res{stat(conn, path)};
+    REQUIRE(res->objSize == 0);
 }
 
 struct TestFixture {
@@ -83,6 +112,7 @@ struct TestFixture {
     // Filesystem paths for the tests
     // Also includes paths for the new resources
     fs::path sandbox;
+    fs::path test_file;
     std::filesystem::path res_a_path;
     std::filesystem::path res_b_path;
 
@@ -157,6 +187,12 @@ struct TestFixture {
         // Reset connection jic!
         conn.disconnect();
         conn.connect();
+
+        test_file = sandbox / "cool-cool-epic.txt";
+        {
+            io::client::default_transport transport{conn};
+            io::odstream out{transport, test_file, io::root_resource_name{res_regis_pt.resource_name}};
+        }
     }
 
     ~TestFixture() {
@@ -184,76 +220,18 @@ struct TestFixture {
     }
 };
 
-auto stat(RcComm& _comm, const fs::path& _path) -> std::unique_ptr<rodsObjStat, decltype(freeRodsObjStat)*>
-{
-    dataObjInp_t input{};
-    std::strncpy(input.objPath, _path.c_str(), std::strlen(_path.c_str()));
-
-    rodsObjStat* output{};
-
-    REQUIRE(rcObjStat(&_comm, &input, &output) >= 0);
-    return {output, freeRodsObjStat};
-}
-
-auto set_replica_status(RcComm& _comm, const fs::path& _path, int replica, int status, const std::unordered_map<std::string, std::string>& _additional_kvp_args) -> int {
-    // Try to figure out the replica keywords...
-    auto [kvp, lm] = irods::experimental::make_key_value_proxy();
-    kvp[REPL_STATUS_KW] = std::to_string(status);
-    kvp[ADMIN_KW] = "";
-
-    std::for_each(std::cbegin(_additional_kvp_args), std::cend(_additional_kvp_args), [&kvp](auto& _thing){
-        kvp[_thing.first] = _thing.second;
-    });
-
-    // Specify the data object we want to mess with
-    // We might be able to reuse the previous data obj inf?
-    DataObjInfo info_two{};
-    std::strncpy(static_cast<char*>(info_two.objPath), _path.c_str(), MAX_NAME_LEN - 1);
-    info_two.replNum = replica;
-
-    // Create the required input
-    ModDataObjMetaInp inp_two{&info_two, kvp.get()};
-    return rcModDataObjMeta(&_comm, &inp_two);
-}
-
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with only good replicas") {
-    const auto bleh{sandbox / "cool-cool-epic.txt"};
-    {
-        io::client::default_transport tp{conn};
-        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
-    }
-
-    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
+    auto res{stat(conn, test_file)};
+    REQUIRE(res->objSize == 0);
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good replicas") {
-    const auto bleh{sandbox / "cool-cool-epic.txt"};
-    {
-        io::client::default_transport tp{conn};
-        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
-    }
-
-    // Try to figure out the replica keywords...
-    auto [kvp, lm] = irods::experimental::make_key_value_proxy();
-    kvp[REPL_STATUS_KW] = std::to_string(STALE_REPLICA);
-    kvp[ADMIN_KW] = "";
     constexpr rodsLong_t bad_size{10};
-    kvp[DATA_SIZE_KW] = std::to_string(bad_size); // Assign arbitrary value to data size
-
-    // Specify the data object we want to mess with
-    DataObjInfo info{};
-    std::strncpy(static_cast<char*>(info.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
-    info.replNum = 0;
-
-    // Create the required input
-    ModDataObjMetaInp inp{&info, kvp.get()};
-
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(set_replica_status(comm, bleh, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}));
-    REQUIRE(rcModDataObjMeta(&comm, &inp) >= 0);
+    REQUIRE(set_replica_status(comm, test_file, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
 
-    auto res{stat(conn, bleh)};
+    auto res{stat(conn, test_file)};
 
     // We expect the good replica size
     REQUIRE(res->objSize == 0);
@@ -261,51 +239,14 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good rep
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas") {\
-    const auto bleh{sandbox / "cool-cool-epic.txt"};
-    {
-        io::client::default_transport tp{conn};
-        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
-    }
-
-    // Try to figure out the replica keywords...
-    auto [kvp_one, lm_one] = irods::experimental::make_key_value_proxy();
-    kvp_one[REPL_STATUS_KW] = std::to_string(STALE_REPLICA);
-    kvp_one[ADMIN_KW] = "";
     constexpr rodsLong_t bad_size_one{10};
-    kvp_one[DATA_SIZE_KW] = std::to_string(bad_size_one); // Assign arbitrary value to data size
-
-    // Specify the data object we want to mess with
-    DataObjInfo info_one{};
-    std::strncpy(static_cast<char*>(info_one.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
-    info_one.replNum = 0;
-
-    // Create the required input
-    ModDataObjMetaInp inp_one{&info_one, kvp_one.get()};
-
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(rcModDataObjMeta(&comm, &inp_one) >= 0);
+    REQUIRE(set_replica_status(comm, test_file, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >= 0);
 
-    // Try to figure out the replica keywords...
-    auto [kvp_two, lm_two] = irods::experimental::make_key_value_proxy();
-    kvp_two[REPL_STATUS_KW] = std::to_string(STALE_REPLICA);
-    kvp_two[ADMIN_KW] = "";
     constexpr rodsLong_t bad_size_two{20};
-    kvp_two[DATA_SIZE_KW] = std::to_string(bad_size_two); // Assign arbitrary value to data size
+    REQUIRE(set_replica_status(comm, test_file, 1, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
 
-    // Specify the data object we want to mess with
-    // We might be able to reuse the previous data obj inf?
-    DataObjInfo info_two{};
-    std::strncpy(static_cast<char*>(info_two.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
-    info_two.replNum = 1;
-
-    // Create the required input
-    ModDataObjMetaInp inp_two{&info_two, kvp_two.get()};
-    REQUIRE(rcModDataObjMeta(&comm, &inp_two) >= 0);
-
-    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
-
-
-    auto res{stat(conn, bleh)};
+    auto res{stat(conn, test_file)};
 
     // We expect the first replica to give the stat when both replicas are stale
     REQUIRE(res->objSize == bad_size_one);
@@ -313,33 +254,12 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas") {\
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status") {
-    const auto bleh{sandbox / "cool-cool-epic.txt"};
-    {
-        io::client::default_transport tp{conn};
-        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
-    }
-
-    // Try to figure out the replica keywords...
-    auto [kvp, lm] = irods::experimental::make_key_value_proxy();
-    kvp[REPL_STATUS_KW] = std::to_string(25); // Just an arbitrary number
-    kvp[ADMIN_KW] = "";
     constexpr rodsLong_t bad_size{10};
-    kvp[DATA_SIZE_KW] = std::to_string(bad_size); // Assign arbitrary value to data size
-
-    // Specify the data object we want to mess with
-    DataObjInfo info{};
-    std::strncpy(static_cast<char*>(info.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
-    info.replNum = 0;
-
-    // Create the required input
-    ModDataObjMetaInp inp{&info, kvp.get()};
-
+    constexpr auto bad_status{42};
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(rcModDataObjMeta(&comm, &inp) >= 0);
+    REQUIRE(set_replica_status(comm, test_file, 0, bad_status, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
 
-    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
-
-    auto res{stat(conn, bleh)};
+    auto res{stat(conn, test_file)};
 
     // We expect to have the size of the good replica
     REQUIRE(res->objSize == 0);
@@ -347,51 +267,16 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status") {
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status") {
-    const auto bleh{sandbox / "cool-cool-epic.txt"};
-    {
-        io::client::default_transport tp{conn};
-        io::odstream out{tp, bleh, io::root_resource_name{res_regis_pt.resource_name}};
-    }
-
-    // Try to figure out the replica keywords...
-    auto [kvp_one, lm_one] = irods::experimental::make_key_value_proxy();
-    constexpr auto random_number{42};
-    kvp_one[REPL_STATUS_KW] = std::to_string(random_number);
-    kvp_one[ADMIN_KW] = "";
     constexpr rodsLong_t bad_size_one{10};
-    kvp_one[DATA_SIZE_KW] = std::to_string(bad_size_one); // Assign arbitrary value to data size
-
-    // Specify the data object we want to mess with
-    DataObjInfo info_one{};
-    std::strncpy(static_cast<char*>(info_one.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
-    info_one.replNum = 0;
-
-    // Create the required input
-    ModDataObjMetaInp inp_one{&info_one, kvp_one.get()};
-
+    constexpr auto bad_status_one{42};
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(rcModDataObjMeta(&comm, &inp_one) >= 0);
+    REQUIRE(set_replica_status(comm, test_file, 0, bad_status_one, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >= 0);
 
-    // Try to figure out the replica keywords...
-    auto [kvp_two, lm_two] = irods::experimental::make_key_value_proxy();
-    constexpr auto different_random_number{56709};
-    kvp_two[REPL_STATUS_KW] = std::to_string(different_random_number);
-    kvp_two[ADMIN_KW] = "";
     constexpr rodsLong_t bad_size_two{20};
-    kvp_two[DATA_SIZE_KW] = std::to_string(bad_size_two); // Assign arbitrary value to data size
+    constexpr auto bad_status_two{56709};
+    REQUIRE(set_replica_status(comm, test_file, 1, bad_status_two, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
 
-    // Specify the data object we want to mess with
-    // We might be able to reuse the previous data obj inf?
-    DataObjInfo info_two{};
-    std::strncpy(static_cast<char*>(info_two.objPath), bleh.c_str(), MAX_NAME_LEN - 1);
-    info_two.replNum = 1;
-
-    // Create the required input
-    ModDataObjMetaInp inp_two{&info_two, kvp_two.get()};
-    REQUIRE(rcModDataObjMeta(&comm, &inp_two) >= 0);
-
-    REQUIRE_NOTHROW(fs::client::status(conn, bleh));
-    auto res{stat(conn, bleh)};
+    auto res{stat(conn, test_file)};
 
     // We expect the first replica to give the stat when both replicas are stale
     REQUIRE(res->objSize == bad_size_one);
