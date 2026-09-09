@@ -88,8 +88,7 @@ TEST_CASE("Stat on single data object")
 
     fs::client::create_collection(conn, sandbox);
 
-    irods::at_scope_exit cleanup{
-        [&] { fs::client::remove_all(conn, sandbox, fs::remove_options::no_trash); }};
+    irods::at_scope_exit cleanup{[&] { fs::client::remove_all(conn, sandbox, fs::remove_options::no_trash); }};
 
     // Create a data object in iRODS.
     // This is used in all future sections.
