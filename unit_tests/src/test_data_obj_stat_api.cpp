@@ -123,7 +123,6 @@ struct TestFixture
     adm::resource_registration_info res_regis_a;
     adm::resource_registration_info res_regis_b;
     adm::resource_registration_info res_regis_repl;
-    adm::resource_registration_info res_regis_pt;
     // NOLINTEND(misc-non-private-member-variables-in-classes)
 
     // Make clang happy with the class
@@ -181,17 +180,12 @@ struct TestFixture
         res_regis_repl = {
             .resource_name = fmt::format("repl-{}", test_uui), .resource_type = adm::resource_type::replication};
         REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_repl));
-        res_regis_pt = {
-            .resource_name = fmt::format("pt-{}", test_uui), .resource_type = adm::resource_type::passthrough};
-        REQUIRE_NOTHROW(adm::client::add_resource(conn, res_regis_pt));
 
         // Close connection and create new one to "commit" previous actions
         conn.disconnect();
         conn.connect();
 
         // Create the hierarchy
-        REQUIRE_NOTHROW(
-            adm::client::add_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name));
         REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name));
         REQUIRE_NOTHROW(adm::client::add_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name));
 
@@ -202,7 +196,7 @@ struct TestFixture
         test_file = sandbox / "cool-cool-epic.txt";
         {
             io::client::default_transport transport{conn};
-            io::odstream out{transport, test_file, io::root_resource_name{res_regis_pt.resource_name}};
+            io::odstream out{transport, test_file, io::root_resource_name{res_regis_repl.resource_name}};
         }
     }
 
@@ -218,10 +212,8 @@ struct TestFixture
         // Unlink the hierarchy
         adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name);
         adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name);
-        adm::client::remove_child_resource(conn, res_regis_pt.resource_name, res_regis_repl.resource_name);
 
         // Cleanup the resources
-        adm::client::remove_resource(conn, res_regis_pt.resource_name);
         adm::client::remove_resource(conn, res_regis_repl.resource_name);
         adm::client::remove_resource(conn, res_regis_b.resource_name);
         adm::client::remove_resource(conn, res_regis_a.resource_name);
