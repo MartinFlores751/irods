@@ -248,7 +248,6 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good rep
 
     // We expect the good replica size
     REQUIRE(res->objSize == 0);
-    REQUIRE(res->objSize != bad_size);
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas")
@@ -264,7 +263,6 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas")
 
     // We expect the first replica to give the stat when both replicas are stale
     REQUIRE(res->objSize == bad_size_one);
-    REQUIRE(res->objSize != bad_size_two);
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status")
@@ -278,7 +276,6 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status")
 
     // We expect to have the size of the good replica
     REQUIRE(res->objSize == 0);
-    REQUIRE(res->objSize != bad_size);
 }
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status")
@@ -298,5 +295,4 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status")
 
     // We expect the first replica to give the stat when both replicas are stale
     REQUIRE(res->objSize == bad_size_one);
-    REQUIRE(res->objSize != bad_size_two);
 }
