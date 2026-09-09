@@ -66,12 +66,12 @@ auto set_replica_status(RcComm& _comm,
     });
 
     // Specify the data object we want to mess with
-    DataObjInfo info_two{};
-    std::strncpy(static_cast<char*>(info_two.objPath), _path.c_str(), MAX_NAME_LEN - 1);
-    info_two.replNum = replica;
+    DataObjInfo info{};
+    std::strncpy(static_cast<char*>(info.objPath), _path.c_str(), MAX_NAME_LEN - 1);
+    info.replNum = replica;
 
     // Create the required input
-    ModDataObjMetaInp inp_two{&info_two, kvp.get()};
+    ModDataObjMetaInp inp_two{&info, kvp.get()};
     return rcModDataObjMeta(&_comm, &inp_two);
 }
 
