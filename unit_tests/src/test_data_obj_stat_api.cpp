@@ -7,6 +7,7 @@
 #include "irods/getRodsEnv.h"
 #include "irods/irods_at_scope_exit.hpp"
 #include "irods/irods_client_api_table.hpp"
+#include "irods/irods_exception.hpp"
 #include "irods/irods_pack_table.hpp"
 #include "irods/key_value_proxy.hpp"
 #include "irods/modDataObjMeta.h"
@@ -199,27 +200,33 @@ struct TestFixture
         }
     }
 
-    ~TestFixture()
+    ~TestFixture() noexcept
     {
         // Reset connection jic!
         conn.disconnect();
-        conn.connect();
 
-        // Cleanup all of the files
-        fs::client::remove_all(conn, sandbox, fs::remove_options::no_trash);
+        try {
+            conn.connect();
 
-        // Unlink the hierarchy
-        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name);
-        adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name);
+            // Cleanup all of the files
+            fs::client::remove_all(conn, sandbox, fs::remove_options::no_trash);
 
-        // Cleanup the resources
-        adm::client::remove_resource(conn, res_regis_repl.resource_name);
-        adm::client::remove_resource(conn, res_regis_b.resource_name);
-        adm::client::remove_resource(conn, res_regis_a.resource_name);
+            // Unlink the hierarchy
+            adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_b.resource_name);
+            adm::client::remove_child_resource(conn, res_regis_repl.resource_name, res_regis_a.resource_name);
 
-        // Cleanup the temp directories
-        std::filesystem::remove_all(res_b_path);
-        std::filesystem::remove_all(res_a_path);
+            // Cleanup the resources
+            adm::client::remove_resource(conn, res_regis_repl.resource_name);
+            adm::client::remove_resource(conn, res_regis_b.resource_name);
+            adm::client::remove_resource(conn, res_regis_a.resource_name);
+
+            // Cleanup the temp directories
+            std::filesystem::remove_all(res_b_path);
+            std::filesystem::remove_all(res_a_path);
+        }
+        catch (const irods::exception& e) {
+            WARN("Exception thrown during cleanup: " << e.what() << "\nTest cleanup may be incomplete.");
+        }
     }
 };
 
