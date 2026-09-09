@@ -60,8 +60,8 @@ auto set_replica_status(RcComm& _comm,
     kvp[REPL_STATUS_KW] = std::to_string(status);
     kvp[ADMIN_KW] = "";
 
-    std::for_each(std::cbegin(_additional_kvp_args), std::cend(_additional_kvp_args), [&kvp](auto& _thing) {
-        kvp[_thing.first] = _thing.second;
+    std::for_each(std::cbegin(_additional_kvp_args), std::cend(_additional_kvp_args), [&kvp](const auto& _kv_to_insert) {
+        kvp[_kv_to_insert.first] = _kv_to_insert.second;
     });
 
     // Specify the data object we want to mess with
@@ -70,8 +70,8 @@ auto set_replica_status(RcComm& _comm,
     info.replNum = replica;
 
     // Create the required input
-    ModDataObjMetaInp inp_two{&info, kvp.get()};
-    return rcModDataObjMeta(&_comm, &inp_two);
+    ModDataObjMetaInp inp{&info, kvp.get()};
+    return rcModDataObjMeta(&_comm, &inp);
 }
 
 TEST_CASE("Stat on single data object")
