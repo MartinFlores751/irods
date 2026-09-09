@@ -1,7 +1,6 @@
 #include <catch2/catch_all.hpp>
 
 #include "irods/client_connection.hpp"
-#include "irods/connection_pool.hpp"
 #include "irods/data_object_modify_info.h"
 #include "irods/dstream.hpp"
 #include "irods/filesystem.hpp"
@@ -25,7 +24,7 @@
 #include "irods/transport/default_transport.hpp"
 
 #include <boost/asio/ip/host_name.hpp>
-#include "boost/uuid/random_generator.hpp"
+#include <boost/uuid/random_generator.hpp>
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_io.hpp>
 
