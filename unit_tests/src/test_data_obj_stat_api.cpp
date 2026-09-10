@@ -15,6 +15,7 @@
 #include "irods/objStat.h"
 #include "irods/rcConnect.h"
 #include "irods/rcMisc.h"
+#include "irods/replica.hpp"
 #include "irods/resource_administration.hpp"
 #include "irods/rodsClient.h"
 #include "irods/rodsDef.h"
@@ -68,7 +69,7 @@ auto set_replica_status(RcComm& _comm,
 
     // Specify the data object we want to mess with
     DataObjInfo info{};
-    std::strncpy(static_cast<char*>(info.objPath), _path.c_str(), sizeof(input.objPath) - 1);
+    std::strncpy(static_cast<char*>(info.objPath), _path.c_str(), sizeof(info.objPath) - 1);
     info.replNum = replica;
 
     // Create the required input
@@ -242,6 +243,9 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good rep
     constexpr rodsLong_t bad_size{10};
     auto& comm{static_cast<RcComm&>(conn)};
     REQUIRE(set_replica_status(comm, test_data_object, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
+
+    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 0) == STALE_REPLICA);
+    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 1) == GOOD_REPLICA);
 
     auto res{stat(conn, test_data_object)};
 
