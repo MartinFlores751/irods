@@ -48,6 +48,7 @@ auto stat(RcComm& _comm, const fs::path& _path) -> std::unique_ptr<rodsObjStat, 
     rodsObjStat* output{};
 
     REQUIRE(rcObjStat(&_comm, &input, &output) >= 0);
+    REQUIRE(output != nullptr);
     return {output, freeRodsObjStat};
 }
 
