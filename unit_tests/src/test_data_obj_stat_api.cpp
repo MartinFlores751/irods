@@ -303,7 +303,7 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status")
     REQUIRE(set_replica_status(
                 comm, test_data_object, 1, bad_status_two, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
 
-    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 0) == bad_size_one);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 0) == bad_status_one);
     REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 1) == bad_status_two);
 
     auto res{stat(conn, test_data_object)};
