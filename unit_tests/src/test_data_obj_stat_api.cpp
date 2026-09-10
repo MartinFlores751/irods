@@ -43,7 +43,7 @@ namespace adm = irods::experimental::administration;
 auto stat(RcComm& _comm, const fs::path& _path) -> std::unique_ptr<rodsObjStat, decltype(freeRodsObjStat)*>
 {
     dataObjInp_t input{};
-    std::strncpy(static_cast<char*>(input.objPath), _path.c_str(), std::strlen(_path.c_str()));
+    std::strncpy(static_cast<char*>(input.objPath), _path.c_str(), MAX_NAME_LEN - 1);
 
     rodsObjStat* output{};
 
