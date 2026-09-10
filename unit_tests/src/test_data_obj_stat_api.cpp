@@ -116,7 +116,7 @@ struct TestFixture
     // Filesystem paths for the tests
     // Also includes paths for the new resources
     fs::path sandbox;
-    fs::path test_file;
+    fs::path test_data_object;
     std::filesystem::path res_a_path;
     std::filesystem::path res_b_path;
 
@@ -194,10 +194,10 @@ struct TestFixture
         conn.disconnect();
         conn.connect();
 
-        test_file = sandbox / "cool-cool-epic.txt";
+        test_data_object = sandbox / "cool-cool-epic.txt";
         {
             io::client::default_transport transport{conn};
-            io::odstream out{transport, test_file, io::root_resource_name{res_regis_repl.resource_name}};
+            io::odstream out{transport, test_data_object, io::root_resource_name{res_regis_repl.resource_name}};
         }
     }
 
@@ -233,7 +233,7 @@ struct TestFixture
 
 TEST_CASE_METHOD(TestFixture, "Stat on data object with only good replicas")
 {
-    auto res{stat(conn, test_file)};
+    auto res{stat(conn, test_data_object)};
     REQUIRE(res->objSize == 0);
 }
 
@@ -241,9 +241,9 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good rep
 {
     constexpr rodsLong_t bad_size{10};
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(set_replica_status(comm, test_file, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
+    REQUIRE(set_replica_status(comm, test_data_object, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
 
-    auto res{stat(conn, test_file)};
+    auto res{stat(conn, test_data_object)};
 
     // We expect the good replica size
     REQUIRE(res->objSize == 0);
@@ -253,12 +253,12 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas")
 {
     constexpr rodsLong_t bad_size_one{10};
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(set_replica_status(comm, test_file, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >= 0);
+    REQUIRE(set_replica_status(comm, test_data_object, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >= 0);
 
     constexpr rodsLong_t bad_size_two{20};
-    REQUIRE(set_replica_status(comm, test_file, 1, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
+    REQUIRE(set_replica_status(comm, test_data_object, 1, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
 
-    auto res{stat(conn, test_file)};
+    auto res{stat(conn, test_data_object)};
 
     // We expect the first replica to give the stat when both replicas are stale
     REQUIRE(res->objSize == bad_size_one);
@@ -269,9 +269,9 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status")
     constexpr rodsLong_t bad_size{10};
     constexpr auto bad_status{42};
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(set_replica_status(comm, test_file, 0, bad_status, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
+    REQUIRE(set_replica_status(comm, test_data_object, 0, bad_status, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
 
-    auto res{stat(conn, test_file)};
+    auto res{stat(conn, test_data_object)};
 
     // We expect to have the size of the good replica
     REQUIRE(res->objSize == 0);
@@ -282,15 +282,15 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status")
     constexpr rodsLong_t bad_size_one{10};
     constexpr auto bad_status_one{42};
     auto& comm{static_cast<RcComm&>(conn)};
-    REQUIRE(set_replica_status(comm, test_file, 0, bad_status_one, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >=
+    REQUIRE(set_replica_status(comm, test_data_object, 0, bad_status_one, {{DATA_SIZE_KW, std::to_string(bad_size_one)}}) >=
             0);
 
     constexpr rodsLong_t bad_size_two{20};
     constexpr auto bad_status_two{56709};
-    REQUIRE(set_replica_status(comm, test_file, 1, bad_status_two, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >=
+    REQUIRE(set_replica_status(comm, test_data_object, 1, bad_status_two, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >=
             0);
 
-    auto res{stat(conn, test_file)};
+    auto res{stat(conn, test_data_object)};
 
     // We expect the first replica to give the stat when both replicas are stale
     REQUIRE(res->objSize == bad_size_one);
