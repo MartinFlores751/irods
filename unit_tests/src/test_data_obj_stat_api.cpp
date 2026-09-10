@@ -245,8 +245,8 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with mixed stale and good rep
     REQUIRE(set_replica_status(comm, test_data_object, 0, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >=
             0);
 
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 0) == STALE_REPLICA);
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 1) == GOOD_REPLICA);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 0) == STALE_REPLICA);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 1) == GOOD_REPLICA);
 
     auto res{stat(conn, test_data_object)};
 
@@ -265,8 +265,8 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only stale replicas")
     REQUIRE(set_replica_status(
                 comm, test_data_object, 1, STALE_REPLICA, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
 
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 0) == STALE_REPLICA);
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 1) == STALE_REPLICA);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 0) == STALE_REPLICA);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 1) == STALE_REPLICA);
 
     auto res{stat(conn, test_data_object)};
 
@@ -281,8 +281,8 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with invalid status")
     auto& comm{static_cast<RcComm&>(conn)};
     REQUIRE(set_replica_status(comm, test_data_object, 0, bad_status, {{DATA_SIZE_KW, std::to_string(bad_size)}}) >= 0);
 
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 0) == bad_status);
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 1) == GOOD_REPLICA);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 0) == bad_status);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 1) == GOOD_REPLICA);
 
     auto res{stat(conn, test_data_object)};
 
@@ -303,8 +303,8 @@ TEST_CASE_METHOD(TestFixture, "Stat on data object with only invalid status")
     REQUIRE(set_replica_status(
                 comm, test_data_object, 1, bad_status_two, {{DATA_SIZE_KW, std::to_string(bad_size_two)}}) >= 0);
 
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 0) == bad_size_one);
-    REQUIRE(irods::experimental::replica::replica_status(conn, test_data_object, 1) == bad_status_two);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 0) == bad_size_one);
+    REQUIRE(irods::experimental::replica::replica_status(comm, test_data_object, 1) == bad_status_two);
 
     auto res{stat(conn, test_data_object)};
 
