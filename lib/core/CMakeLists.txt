@@ -216,6 +216,7 @@ set(
   "${CMAKE_CURRENT_SOURCE_DIR}/include/irods/irods_default_paths.hpp.in"
   "${CMAKE_CURRENT_SOURCE_DIR}/include/irods/rodsVersion.h.in"
   "${CMAKE_CURRENT_SOURCE_DIR}/include/irods/irods_version.h.in"
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/irods/irods_sha.h.in"
 )
 
 set(
@@ -223,6 +224,7 @@ set(
   "${CMAKE_CURRENT_BINARY_DIR}/include/irods/irods_default_paths.hpp"
   "${CMAKE_CURRENT_BINARY_DIR}/include/irods/rodsVersion.h"
   "${CMAKE_CURRENT_BINARY_DIR}/include/irods/irods_version.h"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/irods/irods_sha.h"
 )
 
 set_source_files_properties(
@@ -251,6 +253,12 @@ configure_file(
 configure_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/include/irods/irods_version.h.in"
   "${CMAKE_CURRENT_BINARY_DIR}/include/irods/irods_version.h"
+  @ONLY
+)
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/include/irods/irods_sha.h.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/include/irods/irods_sha.h"
   @ONLY
 )
 

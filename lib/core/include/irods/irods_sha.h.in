@@ -1,0 +1,6 @@
+#ifndef IRODS_SHA_H__
+#define IRODS_SHA_H__
+
+#define IRODS_GIT_COMMIT                    "@IRODS_GIT_SHA1@"
+
+#endif  // IRODS_SHA_H__
