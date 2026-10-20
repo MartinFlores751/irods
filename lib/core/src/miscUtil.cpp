@@ -37,7 +37,7 @@ namespace
     auto copyRodsPath(rodsPath_t* to, const rodsPath_t* from) -> int
     {
         // No nullptrs allowed.
-        if (nullptr == to || nullptr == from) {
+        if (NULL == to || nullptr == from) {
             return static_cast<int>(INVALID_INPUT_ARGUMENT_NULL_POINTER);
         }
 
