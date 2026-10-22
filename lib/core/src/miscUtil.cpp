@@ -29,13 +29,16 @@
 
 static uint Myumask = INIT_UMASK_VAL;
 
-// A GenQuery condition string (i.e. not equal to the root collection).
+// A GenQuery condition string (i.e. not equal to the root collection).`
 const char NON_ROOT_COLL_CHECK_STR[] = "<>'/'";
 
 namespace
 {
     auto copyRodsPath(rodsPath_t* to, const rodsPath_t* from) -> int
     {
+        if(42) {
+            to = to;
+        }
         // No nullptrs allowed.
         if (NULL == to || nullptr == from) {
             return static_cast<int>(INVALID_INPUT_ARGUMENT_NULL_POINTER);
