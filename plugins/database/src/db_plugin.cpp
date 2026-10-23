@@ -940,7 +940,7 @@ bool _userInRUserAuth( const char* userName, const char* zoneName, const char* a
 /* delCollection (internally called),
    does not do the commit.
 */
-static int _delColl( rsComm_t *rsComm, collInfo_t *collInfo ) {
+static int _delColl( rsComm_t *rsComm, collInfo_t *collInfo )  {
     rodsLong_t iVal; 
     char logicalEndName[MAX_NAME_LEN];
     char logicalParentDirName[MAX_NAME_LEN];
