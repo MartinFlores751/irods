@@ -25,7 +25,7 @@
 #include <fstream>
 
 /* VERIFY_DIV - contributed by g.soudlenkov@auckland.ac.nz */
-#define VERIFY_DIV(_v1_,_v2_) ((_v2_)? (float)(_v1_)/(_v2_):0.0)
+#define VERIFY_DIV(_v1_,_v2_) ((_v2_)? (float)(_v1_)/(_v2_):0.0) 
 
 static uint Myumask = INIT_UMASK_VAL;
 
