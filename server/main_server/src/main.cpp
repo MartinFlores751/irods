@@ -13,6 +13,7 @@
 #include "irods/irods_logger.hpp"
 #include "irods/irods_server_api_table.hpp"
 #include "irods/irods_server_properties.hpp"
+#include "irods/irods_sha.h"
 #include "irods/irods_signal.hpp"
 #include "irods/irods_version.h"
 #include "irods/notify_service_manager.hpp"
