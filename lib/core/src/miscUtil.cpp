@@ -30,7 +30,7 @@
 static uint Myumask = INIT_UMASK_VAL;
 
 // A GenQuery condition string (i.e. not equal to the root collection).`
-const char NON_ROOT_COLL_CHECK_STR[] = "<>'/'";
+const char NON_ROOT_COLL_CHECK_STR[] = "<>'/'"; 
 
 namespace
 {
