@@ -227,7 +227,7 @@ if __name__ == '__main__':
     # Guarantee that /var/lib/irods/log/test_mode_output.log is created so that tests which rely on reading log files
     # have a better chance of succeeding. See docs.irods.org/5.0.2/getting_started/running/#test-mode for more details.
     os.environ['IRODS_ENABLE_TEST_MODE'] = '1'
-    os.environ['LLVM_PROFILE_FILE'] = '/tmp/log-%p.profraw'
+    os.environ['LLVM_PROFILE_FILE'] = '/tmp/coverage/log-%p.profraw'
 
     IrodsController().restart(test_mode=True)
     results = run_tests_from_names(test_identifiers, args.buffer_test_output, args.xml_output, args.skip_until)
