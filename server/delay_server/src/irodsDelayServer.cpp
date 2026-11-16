@@ -89,6 +89,9 @@ extern "C" const char* __ubsan_default_options()
 } // __ubsan_default_options
 #endif
 
+// NOLINTNEXTLINE(cert-dcl37-c,cert-dcl51-cpp,bugprone-reserved-identifier)
+extern "C" auto __llvm_profile_write_file(void) -> int;
+
 // clang-format off
 namespace ix = irods::experimental;
 
@@ -958,6 +961,11 @@ int main(int _argc, char** _argv)
 #endif
 
         log_ds::info("Delay server exited normally.");
+
+        log_ds::info("Writting profile data...");
+        if (0 != __llvm_profile_write_file()) {
+            log_ds::error("Failed to write profile data!");
+        }
 
         return 0;
     }
